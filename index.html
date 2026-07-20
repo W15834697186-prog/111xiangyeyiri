@@ -1150,11 +1150,21 @@ const accommodationCustomBtn = $('#accommodationCustomBtn');
 const accommodationStatus = $('#accommodationStatus');
 
 // ==================== 设置管理 ====================
+// 默认配置——打开网页即可使用，无需手动设置
+const DEFAULT_SETTINGS = {
+  baseUrl: 'https://api.deepseek.com/v1',
+  apiKey: 'REDACTED_KEY',
+  model: 'deepseek-chat',
+  amapKey: 'f4b7b60ff530d7373a28d8d01a518d07'
+};
+
 function getSettings() {
   try {
     const raw = localStorage.getItem('xiangye_settings');
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
+    // 用户自定义设置优先，未设置的字段回退到默认值
+    const saved = raw ? JSON.parse(raw) : {};
+    return { ...DEFAULT_SETTINGS, ...saved };
+  } catch { return { ...DEFAULT_SETTINGS }; }
 }
 
 function saveSettings(settings) {
@@ -1168,10 +1178,17 @@ function hasApiConfig() {
 
 function loadSettingsToForm() {
   const s = getSettings();
-  apiBaseUrlInput.value = s.baseUrl || '';
-  apiKeyInput.value = s.apiKey || '';
-  apiModelInput.value = s.model || '';
-  amapApiKeyInput.value = s.amapKey || '';
+  // 如果用户没有自定义设置（和默认值不同），placeholder 显示默认值，输入框留空
+  const saved = localStorage.getItem('xiangye_settings');
+  const user = saved ? JSON.parse(saved) : {};
+  apiBaseUrlInput.value = user.baseUrl || '';
+  apiBaseUrlInput.placeholder = user.baseUrl ? '' : '默认: ' + DEFAULT_SETTINGS.baseUrl;
+  apiKeyInput.value = user.apiKey || '';
+  apiKeyInput.placeholder = user.apiKey ? '' : '默认: sk-...' + DEFAULT_SETTINGS.apiKey.slice(-8);
+  apiModelInput.value = user.model || '';
+  apiModelInput.placeholder = user.model ? '' : '默认: ' + DEFAULT_SETTINGS.model;
+  amapApiKeyInput.value = user.amapKey || '';
+  amapApiKeyInput.placeholder = user.amapKey ? '' : '默认: ...' + DEFAULT_SETTINGS.amapKey.slice(-8);
   updateSettingsIndicator();
 }
 
@@ -1181,8 +1198,7 @@ function hasAmapKey() {
 }
 
 function getAmapKey() {
-  const s = getSettings();
-  return s.amapKey || 'f4b7b60ff530d7373a28d8d01a518d07'; // 默认内置 key
+  return getSettings().amapKey;
 }
 
 function updateSettingsIndicator() {
