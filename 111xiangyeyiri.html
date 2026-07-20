@@ -1,0 +1,2760 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>乡野一日 — AI 乡村行程智能规划器</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+<style>
+  /* ===== Reset & Variables ===== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --green-900: #2D4A32;
+    --green-700: #4A7C59;
+    --green-500: #6B9E76;
+    --green-300: #A3C9A8;
+    --green-100: #E2F0E4;
+    --earth-800: #5C4033;
+    --earth-600: #8B7355;
+    --earth-400: #B8A088;
+    --earth-200: #E8DED1;
+    --cream: #FDF8F0;
+    --white: #FFFAF5;
+    --accent: #D4943A;
+    --accent-light: #F5E6D3;
+    --text: #3B3228;
+    --text-light: #6B5F52;
+    --red-soft: #E07B6E;
+    --shadow-sm: 0 2px 8px rgba(60, 40, 20, 0.08);
+    --shadow-md: 0 4px 20px rgba(60, 40, 20, 0.12);
+    --shadow-lg: 0 8px 40px rgba(60, 40, 20, 0.16);
+    --radius-sm: 8px;
+    --radius-md: 14px;
+    --radius-lg: 20px;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  /* ===== 页面切换 ===== */
+  .page { display: none; animation: pageIn 0.35s ease; }
+  .page.active { display: block; }
+  @keyframes pageIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ===== 页面1：村落发现 ===== */
+  .discovery-search { padding: 8px 0 16px; text-align: center; }
+  .discovery-search input { width: 100%; padding: 14px 18px; font-size: 16px; font-family: inherit; border: 2px solid var(--earth-200); border-radius: 28px; background: var(--white); color: var(--text); }
+  .discovery-search input:focus { outline: none; border-color: var(--green-500); box-shadow: 0 0 0 3px rgba(74,124,89,0.1); }
+  .village-list { display: flex; flex-direction: column; gap: 16px; }
+  .village-card { background: var(--white); border-radius: var(--radius-lg); overflow: hidden; cursor: pointer; border: 1px solid var(--earth-200); transition: transform 0.2s, box-shadow 0.2s; }
+  .village-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-md); }
+  .village-card .card-img { height: 160px; overflow: hidden; position: relative; transition: height 0.7s cubic-bezier(0.25, 0.1, 0.25, 1); }
+  .village-card .card-img img { width: 100%; height: 100%; object-fit: cover; object-position: center 30%; transition: object-position 0.7s ease; }
+  .village-card:hover .card-img { height: 340px; }
+  .village-card:hover .card-img img { object-position: center top; }
+  .village-card .card-body { padding: 16px 18px; }
+  .village-card .card-body h3 { font-family: 'Noto Serif SC', serif; font-size: 18px; color: var(--green-900); }
+  .village-card .card-body .card-desc { font-size: 13px; color: var(--text-light); margin: 4px 0 10px; }
+  .village-card .card-body .card-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .village-card .card-tags span { font-size: 11px; padding: 3px 10px; border-radius: 12px; background: var(--green-100); color: var(--green-700); }
+
+  /* ===== 页面2：村落详情 ===== */
+  .detail-back { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; color: var(--green-700); cursor: pointer; background: none; border: none; font-family: inherit; padding: 8px 0; margin-bottom: 8px; }
+  .detail-back:hover { color: var(--green-900); }
+  .detail-hero { height: 280px; border-radius: var(--radius-lg); display: flex; align-items: flex-end; padding: 24px; position: relative; overflow: hidden; margin-bottom: 20px; background-size: cover; background-position: center 30%; }
+  .detail-hero .hero-text { color: white; position: relative; z-index: 1; }
+  .detail-hero .hero-text h2 { font-family: 'Noto Serif SC', serif; font-size: 28px; text-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+  .detail-hero .hero-text p { font-size: 14px; opacity: 0.9; margin-top: 4px; text-shadow: 0 1px 4px rgba(0,0,0,0.3); }
+  .detail-hero::after { content: ''; position: absolute; inset: 0; background: linear-gradient(transparent 30%, rgba(0,0,0,0.5)); }
+  .detail-desc { font-size: 14px; line-height: 1.8; color: var(--text); margin-bottom: 24px; padding: 0 4px; }
+  .detail-section-title { font-family: 'Noto Serif SC', serif; font-size: 18px; color: var(--green-900); margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+  .spot-list { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+  .spot-card { display: flex; gap: 14px; background: var(--white); border-radius: var(--radius-md); padding: 14px; border: 1px solid var(--earth-200); align-items: center; }
+  .spot-card .spot-img { width: 64px; height: 64px; border-radius: var(--radius-sm); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 28px; }
+  .spot-card .spot-info h4 { font-size: 15px; color: var(--earth-800); }
+  .spot-card .spot-info p { font-size: 12px; color: var(--text-light); margin: 2px 0 6px; }
+  .spot-card .spot-info .spot-tag { font-size: 10px; padding: 2px 8px; border-radius: 10px; background: var(--accent-light); color: var(--accent); }
+
+  .detail-action { text-align: center; padding: 8px 0 32px; }
+  .detail-action .btn { width: 100%; max-width: 360px; }
+  .page3-back { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--green-700); cursor: pointer; background: none; border: none; font-family: inherit; padding: 4px 0; margin-bottom: 12px; }
+
+  body {
+    font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: var(--cream);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse at 20% 20%, rgba(163, 201, 168, 0.15) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 80%, rgba(232, 222, 209, 0.3) 0%, transparent 60%);
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M30 5 Q35 15 30 25 Q25 15 30 5Z' fill='%234A7C59' opacity='0.03'/%3E%3C/svg%3E");
+    background-size: 80px 80px;
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ===== Layout ===== */
+  .app-container {
+    position: relative; z-index: 1;
+    max-width: 720px; margin: 0 auto; padding: 20px 16px 60px;
+  }
+
+  /* ===== Header ===== */
+  .app-header {
+    text-align: center; padding: 32px 0 24px;
+    position: relative;
+  }
+  .app-header .logo-icon {
+    font-size: 48px; display: block; margin-bottom: 8px;
+    animation: float 3s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+  .app-header h1 {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 32px; font-weight: 700;
+    color: var(--green-900);
+    letter-spacing: 2px;
+  }
+  .app-header .subtitle {
+    font-size: 14px; color: var(--text-light);
+    margin-top: 4px; letter-spacing: 1px;
+  }
+
+  /* ===== 设置按钮 & 面板 ===== */
+  .settings-toggle {
+    position: absolute;
+    top: 10px; right: 0;
+    width: 40px; height: 40px;
+    border: none; background: none;
+    font-size: 22px; cursor: pointer;
+    border-radius: 50%;
+    transition: all 0.25s;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-light);
+    z-index: 10;
+  }
+  .settings-toggle:hover {
+    background: var(--green-100);
+    color: var(--green-700);
+    transform: rotate(60deg);
+  }
+  .settings-toggle.has-config {
+    color: var(--green-700);
+  }
+  .settings-toggle.has-config::after {
+    content: '';
+    position: absolute;
+    top: 6px; right: 6px;
+    width: 8px; height: 8px;
+    background: var(--green-500);
+    border-radius: 50%;
+    border: 2px solid var(--cream);
+  }
+
+  .settings-panel {
+    display: none;
+    position: absolute;
+    top: 54px; right: 0;
+    width: 320px;
+    background: var(--white);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    border: 1px solid var(--earth-200);
+    padding: 24px;
+    z-index: 20;
+    animation: fadeInUp 0.25s ease;
+  }
+  .settings-panel.show { display: block; }
+  .settings-panel h3 {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 16px; color: var(--green-900);
+    margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .settings-panel .field {
+    margin-bottom: 14px;
+  }
+  .settings-panel label {
+    display: block;
+    font-size: 12px; font-weight: 600;
+    color: var(--earth-600);
+    margin-bottom: 4px;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .settings-panel input {
+    width: 100%; padding: 10px 12px;
+    font-size: 14px; font-family: inherit;
+    border: 2px solid var(--earth-200);
+    border-radius: var(--radius-sm);
+    background: var(--cream);
+    color: var(--text);
+    transition: border-color 0.2s;
+  }
+  .settings-panel input:focus {
+    outline: none;
+    border-color: var(--green-500);
+    box-shadow: 0 0 0 3px rgba(74, 124, 89, 0.1);
+  }
+  .settings-panel .field-row {
+    display: flex; gap: 8px;
+  }
+  .settings-panel .btn-sm {
+    font-size: 13px; padding: 8px 16px;
+    border-radius: 20px; border: none;
+    cursor: pointer; font-family: inherit;
+    font-weight: 600; transition: all 0.2s;
+  }
+  .btn-save {
+    background: var(--green-700); color: white;
+    flex: 1;
+  }
+  .btn-save:hover { background: var(--green-900); }
+  .btn-clear {
+    background: none; color: var(--text-light);
+    text-decoration: underline;
+  }
+  .btn-clear:hover { color: var(--red-soft); }
+  .settings-panel .status {
+    font-size: 12px; margin-top: 8px;
+    padding: 6px 10px; border-radius: 6px;
+    display: none;
+  }
+  .settings-panel .status.show { display: block; }
+  .status.success { background: var(--green-100); color: var(--green-900); }
+  .status.info { background: var(--accent-light); color: var(--earth-800); }
+
+  /* ===== Form Card ===== */
+  .card {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    padding: 28px 24px;
+    margin-bottom: 24px;
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--earth-200);
+    transition: box-shadow 0.3s;
+  }
+  .card:hover { box-shadow: var(--shadow-md); }
+
+  .card-title {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 20px; font-weight: 700;
+    color: var(--green-900);
+    margin-bottom: 20px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .card-title::before { content: '🌾'; font-size: 22px; }
+
+  /* ===== Form Elements ===== */
+  .form-group { margin-bottom: 20px; }
+  .form-label {
+    display: block;
+    font-size: 14px; font-weight: 600;
+    color: var(--earth-800);
+    margin-bottom: 6px;
+    letter-spacing: 0.5px;
+  }
+  .form-label .icon { margin-right: 4px; }
+
+  .form-input, .form-select {
+    width: 100%; padding: 12px 16px;
+    font-size: 15px; font-family: inherit;
+    border: 2px solid var(--earth-200);
+    border-radius: var(--radius-sm);
+    background: var(--cream);
+    color: var(--text);
+    transition: all 0.25s;
+    appearance: none;
+    -webkit-appearance: none;
+  }
+  .form-input:focus, .form-select:focus {
+    outline: none;
+    border-color: var(--green-500);
+    box-shadow: 0 0 0 3px rgba(74, 124, 89, 0.12);
+    background: var(--white);
+  }
+
+  .dest-presets {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px;
+  }
+  .dest-preset {
+    font-size: 13px; font-family: inherit;
+    padding: 6px 14px;
+    border: 1.5px solid var(--green-300);
+    border-radius: 20px;
+    background: var(--green-100);
+    color: var(--green-900);
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .dest-preset:hover {
+    background: var(--green-300);
+    border-color: var(--green-500);
+    color: var(--white);
+  }
+  .dest-preset.active {
+    background: var(--green-700);
+    border-color: var(--green-700);
+    color: var(--white);
+  }
+
+  .group-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 10px; align-items: end;
+  }
+  .group-row .form-group { margin-bottom: 0; }
+  .toggle-group { display: flex; gap: 8px; }
+  .toggle-btn {
+    font-size: 13px; font-family: inherit;
+    padding: 10px 14px;
+    border: 2px solid var(--earth-200);
+    border-radius: var(--radius-sm);
+    background: var(--white);
+    color: var(--text-light);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex; align-items: center; gap: 4px;
+    white-space: nowrap;
+  }
+  .toggle-btn:hover { border-color: var(--earth-400); }
+  .toggle-btn.active {
+    border-color: var(--accent);
+    background: var(--accent-light);
+    color: var(--earth-800);
+    font-weight: 600;
+  }
+
+  .tag-group { display: flex; flex-wrap: wrap; gap: 10px; }
+  .tag-btn {
+    font-size: 14px; font-family: inherit;
+    padding: 10px 20px;
+    border: 2px solid var(--earth-200);
+    border-radius: 25px;
+    background: var(--white);
+    color: var(--text-light);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .tag-btn:hover { border-color: var(--green-400); background: var(--green-100); }
+  .tag-btn.active {
+    border-color: var(--green-700);
+    background: var(--green-100);
+    color: var(--green-900);
+    font-weight: 600;
+  }
+
+  .duration-group { display: flex; gap: 10px; }
+  .duration-btn {
+    flex: 1;
+    font-size: 14px; font-family: inherit;
+    padding: 12px;
+    border: 2px solid var(--earth-200);
+    border-radius: var(--radius-sm);
+    background: var(--white);
+    color: var(--text-light);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-align: center;
+  }
+  .duration-btn:hover { border-color: var(--green-400); background: var(--green-100); }
+  .duration-btn.active {
+    border-color: var(--green-700);
+    background: var(--green-700);
+    color: var(--white);
+    font-weight: 600;
+  }
+
+  /* ===== 按钮 ===== */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    font-size: 16px; font-family: inherit; font-weight: 600;
+    padding: 14px 32px;
+    border: none; border-radius: 30px;
+    cursor: pointer;
+    transition: all 0.25s;
+    letter-spacing: 1px;
+  }
+  .btn-primary {
+    width: 100%;
+    background: var(--green-700);
+    color: white;
+    box-shadow: 0 4px 16px rgba(74, 124, 89, 0.3);
+  }
+  .btn-primary:hover {
+    background: var(--green-900);
+    box-shadow: 0 6px 24px rgba(74, 124, 89, 0.4);
+    transform: translateY(-1px);
+  }
+  .btn-primary:active { transform: translateY(0); }
+  .btn-primary:disabled {
+    background: var(--earth-400);
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+  }
+
+  .btn-outline {
+    width: 100%;
+    background: var(--white);
+    color: var(--green-700);
+    border: 2px solid var(--green-500);
+  }
+  .btn-outline:hover {
+    background: var(--green-100);
+    border-color: var(--green-700);
+  }
+
+  .btn-sm {
+    font-size: 14px; padding: 10px 20px; border-radius: 20px;
+  }
+
+  /* ===== Loading Overlay ===== */
+  .loading-overlay {
+    display: none;
+    text-align: center;
+    padding: 48px 24px;
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    border: 1px solid var(--earth-200);
+    margin-bottom: 24px;
+  }
+  .loading-overlay.show { display: block; animation: fadeInUp 0.3s ease; }
+
+  .loading-icon {
+    font-size: 56px;
+    display: block;
+    margin-bottom: 16px;
+    animation: float 2s ease-in-out infinite;
+  }
+  .loading-phase {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 18px; font-weight: 600;
+    color: var(--green-900);
+    margin-bottom: 4px;
+    transition: opacity 0.5s ease;
+  }
+  .loading-sub {
+    font-size: 13px; color: var(--text-light);
+    transition: opacity 0.5s ease;
+  }
+  .loading-dots {
+    display: flex; justify-content: center; gap: 6px;
+    margin-top: 20px;
+  }
+  .loading-dots span {
+    width: 8px; height: 8px;
+    background: var(--green-300);
+    border-radius: 50%;
+    animation: dotPulse 1.4s ease-in-out infinite;
+  }
+  .loading-dots span:nth-child(2) { animation-delay: 0.2s; }
+  .loading-dots span:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes dotPulse {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+
+  /* ===== 错误提示 ===== */
+  .error-card {
+    display: none;
+    text-align: center;
+    padding: 32px 24px;
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    border: 2px solid var(--earth-200);
+    margin-bottom: 24px;
+  }
+  .error-card.show { display: block; animation: fadeInUp 0.3s ease; }
+  .error-card .error-icon { font-size: 48px; display: block; margin-bottom: 12px; }
+  .error-card .error-title {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 18px; font-weight: 600;
+    color: var(--earth-800);
+    margin-bottom: 4px;
+  }
+  .error-card .error-msg {
+    font-size: 14px; color: var(--text-light);
+    margin-bottom: 16px; line-height: 1.6;
+  }
+  .error-card .error-actions {
+    display: flex; gap: 10px; justify-content: center;
+  }
+  .btn-retry {
+    background: var(--green-700); color: white;
+    font-size: 14px; padding: 10px 24px;
+    border-radius: 20px; border: none;
+    cursor: pointer; font-family: inherit; font-weight: 600;
+  }
+  .btn-retry:hover { background: var(--green-900); }
+  .btn-fallback {
+    background: var(--white); color: var(--earth-600);
+    font-size: 14px; padding: 10px 24px;
+    border-radius: 20px; border: 2px solid var(--earth-200);
+    cursor: pointer; font-family: inherit;
+  }
+  .btn-fallback:hover { background: var(--earth-200); }
+
+  /* ===== 结果区域 ===== */
+  .result-section {
+    display: none;
+    animation: fadeInUp 0.5s ease;
+  }
+  .result-section.show { display: block; }
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ===== 行程卡片 ===== */
+  .trip-card {
+    background: var(--white);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--earth-200);
+  }
+  .trip-card-header {
+    background: linear-gradient(135deg, var(--green-700), var(--green-900));
+    color: white;
+    padding: 28px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .trip-card-header::after {
+    content: '';
+    position: absolute;
+    right: -20px; top: -20px;
+    width: 120px; height: 120px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 50%;
+  }
+  .trip-card-header .route-badge {
+    display: inline-block;
+    font-size: 12px; font-weight: 500;
+    padding: 4px 12px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 12px;
+    margin-bottom: 8px;
+  }
+  .trip-card-header h2 {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 26px; font-weight: 700;
+    letter-spacing: 1px;
+  }
+  .trip-card-header .trip-summary {
+    font-size: 14px; opacity: 0.9;
+    margin-top: 8px; line-height: 1.5;
+  }
+  .trip-card-header .trip-meta {
+    display: flex; flex-wrap: wrap; gap: 12px;
+    margin-top: 14px;
+  }
+  .trip-card-header .meta-item {
+    font-size: 12px;
+    background: rgba(255,255,255,0.15);
+    padding: 4px 10px; border-radius: 10px;
+    display: flex; align-items: center; gap: 4px;
+  }
+
+  /* ===== AI 标注 ===== */
+  .ai-badge {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 10px 24px;
+    font-size: 12px; color: var(--text-light);
+    background: var(--cream);
+    border-top: 1px solid var(--earth-200);
+    letter-spacing: 0.5px;
+  }
+  .ai-badge .ai-dot {
+    width: 6px; height: 6px;
+    background: var(--green-500);
+    border-radius: 50%;
+    animation: dotPulse 2s ease-in-out infinite;
+  }
+
+  /* ===== 时间轴 ===== */
+  .timeline {
+    padding: 24px 24px 20px;
+    position: relative;
+  }
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: 44px; top: 40px; bottom: 40px;
+    width: 3px;
+    background: linear-gradient(to bottom, var(--green-300), var(--earth-200));
+    border-radius: 2px;
+  }
+  .timeline-item {
+    display: flex; gap: 16px;
+    margin-bottom: 20px;
+    position: relative;
+    animation: fadeInUp 0.4s ease backwards;
+  }
+  .timeline-item:nth-child(1) { animation-delay: 0.05s; }
+  .timeline-item:nth-child(2) { animation-delay: 0.1s; }
+  .timeline-item:nth-child(3) { animation-delay: 0.15s; }
+  .timeline-item:nth-child(4) { animation-delay: 0.2s; }
+  .timeline-item:nth-child(5) { animation-delay: 0.25s; }
+  .timeline-item:nth-child(6) { animation-delay: 0.3s; }
+  .timeline-item:nth-child(7) { animation-delay: 0.35s; }
+  .timeline-item:nth-child(8) { animation-delay: 0.4s; }
+
+  .timeline-time {
+    flex-shrink: 0; width: 52px;
+    font-size: 13px; font-weight: 700;
+    color: var(--green-700);
+    background: var(--green-100);
+    border-radius: 12px;
+    padding: 4px 0; text-align: center;
+    height: fit-content; margin-top: 4px;
+    z-index: 1;
+  }
+  .timeline-dot {
+    flex-shrink: 0;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--green-500);
+    border: 3px solid var(--white);
+    box-shadow: 0 0 0 2px var(--green-300);
+    margin-top: 8px;
+    z-index: 1;
+  }
+  .timeline-start .timeline-dot {
+    width: 28px; height: 28px;
+    background: var(--accent-light);
+    border: 3px solid var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-light);
+    margin-top: 0;
+    font-size: 14px;
+    line-height: 22px;
+    text-align: center;
+    overflow: hidden;
+  }
+  .timeline-start .timeline-content {
+    border-left: 3px solid var(--accent);
+  }
+  .timeline-content {
+    flex: 1; min-width: 0;
+    background: var(--cream);
+    border-radius: var(--radius-md);
+    padding: 16px 18px;
+    border: 1px solid var(--earth-200);
+    transition: box-shadow 0.2s;
+  }
+  .timeline-content:hover { box-shadow: var(--shadow-sm); }
+  .timeline-content h4 {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 16px; font-weight: 600;
+    color: var(--earth-800);
+  }
+  .timeline-content .activity {
+    font-size: 14px; color: var(--text);
+    margin-top: 4px; line-height: 1.6;
+  }
+  .timeline-content .tip {
+    font-size: 12px; color: var(--accent);
+    margin-top: 8px;
+    padding: 6px 10px;
+    background: var(--accent-light);
+    border-radius: 6px;
+    display: flex; align-items: flex-start; gap: 4px;
+  }
+  .timeline-content .tip::before { content: '💡'; flex-shrink: 0; }
+
+  /* ===== 地图 ===== */
+  .map-section {
+    padding: 0 24px 24px;
+  }
+  .map-section h3 {
+    font-family: 'Noto Serif SC', serif;
+    font-size: 16px; font-weight: 600;
+    color: var(--green-900);
+    margin-bottom: 12px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  #map {
+    width: 100%; height: 320px;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--earth-200);
+    z-index: 1;
+  }
+  .leaflet-control-attribution { font-size: 10px !important; }
+
+  /* ===== 换个路线 ===== */
+  .switch-section {
+    text-align: center; padding: 0 0 8px;
+  }
+  .switch-section .btn-outline {
+    width: auto; padding: 12px 36px;
+  }
+
+  /* ===== Footer ===== */
+  .app-footer {
+    text-align: center; padding: 32px 0 16px;
+    font-size: 12px; color: var(--text-light);
+    opacity: 0.7;
+  }
+
+  /* ===== 响应式 ===== */
+  @media (max-width: 480px) {
+    .app-header h1 { font-size: 26px; }
+    .card { padding: 20px 16px; border-radius: var(--radius-md); }
+    .group-row { grid-template-columns: 1fr; gap: 8px; }
+    .toggle-group { justify-content: stretch; }
+    .toggle-btn { flex: 1; justify-content: center; }
+    .duration-group { flex-direction: column; gap: 8px; }
+    .tag-group { gap: 6px; }
+    .tag-btn { font-size: 13px; padding: 8px 14px; }
+    .trip-card-header { padding: 22px 18px; }
+    .trip-card-header h2 { font-size: 22px; }
+    .timeline { padding: 16px 12px 12px; }
+    .timeline::before { left: 32px; }
+    .timeline-item { gap: 10px; }
+    .timeline-time { width: 44px; font-size: 11px; }
+    .timeline-content { padding: 12px 14px; }
+    .map-section { padding: 0 12px 16px; }
+    #map { height: 240px; }
+    .settings-panel {
+      width: calc(100vw - 32px);
+      right: -8px;
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-container">
+
+  <!-- ==================== 页面 1：村落发现 ==================== -->
+  <div id="page1" class="page active">
+    <header class="app-header">
+      <span class="logo-icon">🏡</span>
+      <h1>乡野一日</h1>
+      <p class="subtitle">发现岭南最美的古村落</p>
+    </header>
+
+    <div class="discovery-search" style="text-align:center;">
+      <button class="btn btn-outline" onclick="showPage('page3')" style="width:auto;padding:12px 28px;font-size:14px;">
+        🔍 不感兴趣的话，点这里自选目的地
+      </button>
+    </div>
+
+    <div class="village-list" id="villageList">
+      <div class="village-card" data-dest="清远千年瑶寨" onclick="handleVillageClick('清远千年瑶寨')">
+        <div class="card-img"><img src="./images/yaozhai.jpg" alt="清远千年瑶寨" loading="lazy"></div>
+        <div class="card-body">
+          <h3>清远千年瑶寨</h3>
+          <p class="card-desc">千年瑶寨，云雾里的秘境</p>
+          <div class="card-tags"><span>历史文化</span><span>非遗体验</span></div>
+        </div>
+      </div>
+      <div class="village-card" data-dest="清远英西峰林" onclick="handleVillageClick('清远英西峰林')">
+        <div class="card-img"><img src="./images/fenglin.jpg" alt="清远英西峰林" loading="lazy"></div>
+        <div class="card-body">
+          <h3>清远英西峰林</h3>
+          <p class="card-desc">广东小桂林，峰林间的田园诗</p>
+          <div class="card-tags"><span>自然风光</span><span>摄影天堂</span></div>
+        </div>
+      </div>
+      <div class="village-card" data-dest="梅州桥溪古村" onclick="handleVillageClick('梅州桥溪古村')">
+        <div class="card-img"><img src="./images/qiaoxi.jpg" alt="梅州桥溪古村" loading="lazy"></div>
+        <div class="card-body">
+          <h3>梅州桥溪古村</h3>
+          <p class="card-desc">客家围龙深处的山水画廊</p>
+          <div class="card-tags"><span>客家文化</span><span>古村落</span></div>
+        </div>
+      </div>
+      <div class="village-card" data-dest="韶关丹霞夏富村" onclick="handleVillageClick('韶关丹霞夏富村')">
+        <div class="card-img"><img src="./images/xiafu.jpg" alt="韶关丹霞夏富村" loading="lazy"></div>
+        <div class="card-body">
+          <h3>韶关丹霞夏富村</h3>
+          <p class="card-desc">丹霞山脚的隐世田园</p>
+          <div class="card-tags"><span>丹霞地貌</span><span>田园生活</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== 页面 2：村落详情 ==================== -->
+  <div id="page2" class="page">
+    <button class="detail-back" id="detailBack">← 返回村落列表</button>
+    <div class="detail-hero" id="detailHero">
+      <div class="hero-text"><h2 id="detailName"></h2><p id="detailTagline"></p></div>
+    </div>
+    <p class="detail-desc" id="detailDesc"></p>
+    <div class="detail-section-title">📍 村中值得一去</div>
+    <div class="spot-list" id="spotList"></div>
+    <div class="detail-action">
+      <button class="btn btn-primary" id="detailGoPlan">✨ 定制我的行程</button>
+    </div>
+  </div>
+
+  <!-- ==================== 页面 3：自选目的地 ==================== -->
+  <div id="page3" class="page">
+    <button class="detail-back" onclick="showPage('page1')">← 返回村落列表</button>
+    <header class="app-header">
+      <span class="logo-icon">🔍</span>
+      <h1>自选目的地</h1>
+      <p class="subtitle">输入你想去的广东乡村，开始规划</p>
+    </header>
+    <div class="card">
+      <div class="form-group">
+        <label class="form-label"><span class="icon">📍</span>想去哪里？</label>
+        <input type="text" class="form-input" id="customDestInput"
+               placeholder="输入任意广东乡村名称…"
+               style="font-size:18px;padding:16px;">
+        <div class="dest-presets" style="margin-top:12px;">
+          <button class="dest-preset" data-dest="清远千年瑶寨">清远千年瑶寨</button>
+          <button class="dest-preset" data-dest="清远英西峰林">清远英西峰林</button>
+          <button class="dest-preset" data-dest="梅州桥溪古村">梅州桥溪古村</button>
+          <button class="dest-preset" data-dest="韶关丹霞夏富村">韶关丹霞夏富村</button>
+        </div>
+      </div>
+      <button class="btn btn-primary" id="customDestGo">✨ 开始规划行程</button>
+    </div>
+  </div>
+
+  <!-- ==================== 页面 4：行程规划（原有功能） ==================== -->
+  <div id="page4" class="page">
+    <button class="page3-back" onclick="showPage('page1')">← 返回村落列表</button>
+
+  <!-- ========== Header ========== -->
+  <header class="app-header">
+    <button class="settings-toggle" id="settingsToggle" title="API 设置">⚙️</button>
+    <span class="logo-icon">🏡</span>
+    <h1>乡野一日</h1>
+    <p class="subtitle">AI 乡村行程智能规划器 · 发现岭南乡愁</p>
+
+    <!-- 设置面板 -->
+    <div class="settings-panel" id="settingsPanel">
+      <h3>🔧 API 设置</h3>
+      <p style="font-size:12px;color:var(--text-light);margin-bottom:14px;">
+        使用 OpenAI 兼容接口，支持 DeepSeek、通义千问、智谱等。
+      </p>
+      <div class="field">
+        <label>接口地址 (Base URL)</label>
+        <input type="text" id="apiBaseUrl"
+               placeholder="https://api.openai.com/v1">
+      </div>
+      <div class="field">
+        <label>API Key</label>
+        <input type="password" id="apiKey"
+               placeholder="sk-...">
+      </div>
+      <div class="field">
+        <label>模型名称</label>
+        <input type="text" id="apiModel"
+               placeholder="gpt-4o / deepseek-chat / qwen-plus">
+      </div>
+      <div class="field">
+        <label>🗺️ 高德地图 API Key</label>
+        <input type="text" id="amapApiKey"
+               placeholder="用于地理编码 + POI 搜索，在 lbs.amap.com 获取">
+      </div>
+      <div class="field-row">
+        <button class="btn-sm btn-save" id="saveSettings">💾 保存配置</button>
+        <button class="btn-sm btn-clear" id="clearSettings">清除</button>
+      </div>
+      <div class="status" id="settingsStatus"></div>
+      <p style="font-size:11px;color:var(--text-light);margin-top:10px;line-height:1.4;">
+        💡 配置保存在本地浏览器，不会上传到任何服务器。未配置时将使用内置的示例行程数据。
+      </p>
+    </div>
+  </header>
+
+  <!-- ========== 表单卡片 ========== -->
+  <div class="card" id="formCard">
+    <div class="card-title">规划你的乡野之旅</div>
+
+    <div class="form-group" id="destFormGroup" style="display:none;">
+      <label class="form-label"><span class="icon">📍</span>目的地</label>
+      <input type="text" class="form-input" id="destInput"
+             placeholder="输入目的地…"
+             value="清远千年瑶寨" readonly>
+      <div class="dest-presets" id="destPresets" style="display:none;"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label"><span class="icon">👥</span>出行人数</label>
+      <div class="group-row">
+        <div class="form-group">
+          <input type="number" class="form-input" id="peopleCount"
+                 min="1" max="20" value="2" placeholder="人数">
+        </div>
+        <div class="toggle-group">
+          <button class="toggle-btn" id="hasElderly">🧓 有老人</button>
+          <button class="toggle-btn" id="hasChildren">👶 有小孩</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label"><span class="icon">❤️</span>兴趣偏好（可多选）</label>
+      <div class="tag-group" id="interestTags">
+        <button class="tag-btn" data-tag="history">🏛️ 历史文化</button>
+        <button class="tag-btn active" data-tag="nature">🏔️ 自然风光</button>
+        <button class="tag-btn" data-tag="food">🍜 美食体验</button>
+        <button class="tag-btn" data-tag="family">🎒 亲子研学</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label"><span class="icon">⏱️</span>游玩时长</label>
+      <div class="duration-group" id="durationGroup">
+        <button class="duration-btn active" data-dur="full">一天</button>
+        <button class="duration-btn" data-dur="two">两天一夜</button>
+        <button class="duration-btn" data-dur="three">三天两夜</button>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;align-items:center;">
+        <span style="font-size:13px;color:var(--text-light);white-space:nowrap;">或自定义：</span>
+        <input type="number" id="customDays" class="form-input"
+               min="1" max="7" placeholder="天数"
+               style="width:70px;padding:8px 10px;font-size:14px;">
+        <span style="font-size:13px;color:var(--text-light);">天</span>
+        <span style="font-size:11px;color:var(--text-light);">（大于 1 天自动过夜）</span>
+      </div>
+    </div>
+
+    <!-- 住宿选择 -->
+    <div class="form-group" id="accommodationGroup">
+      <label class="form-label"><span class="icon">🏠</span>住宿地点（行程起点）</label>
+      <div style="display:flex;gap:8px;">
+        <select class="form-input" id="accommodationSelect" style="flex:1;cursor:pointer;">
+          <option value="">-- 自动搜索中… --</option>
+        </select>
+        <input type="text" class="form-input" id="accommodationCustom"
+               placeholder="或手动输入住处名称"
+               style="flex:1;display:none;">
+        <button type="button" class="toggle-btn" id="accommodationCustomBtn"
+                style="padding:10px 12px;white-space:nowrap;font-size:12px;">✏️ 手动输入</button>
+      </div>
+      <div id="accommodationStatus" style="font-size:11px;color:var(--text-light);margin-top:4px;"></div>
+    </div>
+
+    <button class="btn btn-primary" id="generateBtn">
+      ✨ 生成行程
+    </button>
+  </div>
+
+  <!-- ========== Loading ========== -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <span class="loading-icon" id="loadingIcon">🔍</span>
+    <div class="loading-phase" id="loadingPhase">正在探访村落…</div>
+    <div class="loading-sub" id="loadingSub">搜集本地人的私藏情报</div>
+    <div class="loading-dots">
+      <span></span><span></span><span></span>
+    </div>
+  </div>
+
+  <!-- ========== 错误提示 ========== -->
+  <div class="error-card" id="errorCard">
+    <span class="error-icon" id="errorIcon">🌄</span>
+    <div class="error-title" id="errorTitle">哎呀，出了点状况</div>
+    <div class="error-msg" id="errorMsg">山里的信号不太好，请检查网络后重试。</div>
+    <div class="error-actions">
+      <button class="btn-retry" id="retryBtn">🔄 再试一次</button>
+      <button class="btn-fallback" id="fallbackBtn">📋 使用示例行程</button>
+    </div>
+  </div>
+
+  <!-- ========== 结果区域 ========== -->
+  <div class="result-section" id="resultSection">
+    <div class="trip-card" id="tripCard">
+      <div class="trip-card-header" id="tripHeader"></div>
+      <div class="timeline" id="timeline"></div>
+      <div class="map-section">
+        <h3>🗺️ 行程地图</h3>
+        <div id="map"></div>
+      </div>
+      <div class="ai-badge" id="aiBadge">
+        <span class="ai-dot"></span> 由 AI 生成，仅供参考
+      </div>
+    </div>
+
+    <div class="switch-section" style="margin-top: 20px;">
+      <button class="btn btn-outline" id="switchBtn">
+        🔄 换个路线
+      </button>
+      <p style="font-size:12px; color:var(--text-light); margin-top:8px;" id="switchHint">
+        让 AI 为你重新规划一条不同的路线
+      </p>
+    </div>
+
+    <div class="switch-section" style="margin-top: 12px;">
+      <button class="btn btn-sm" id="backBtn" style="
+        background: transparent; border: none; color: var(--text-light);
+        font-size: 14px; text-decoration: underline; cursor: pointer;
+      ">← 返回修改条件</button>
+    </div>
+  </div>
+
+  <footer class="app-footer">
+    🌿 乡野一日 · 让每一次出发都充满期待
+  </footer>
+  </div><!-- /page4 -->
+</div><!-- /app-container -->
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+// ==================== 硬编码兜底数据 ====================
+const FALLBACK_ROUTES = {
+  '清远千年瑶寨': [{
+    id: 'yao-classic',
+    name: '经典人文线',
+    summary: '沉浸式体验千年瑶寨的历史底蕴与民族风情，从晨雾到暮色，走遍古寨的每一个动人角落。',
+    tags: ['history', 'food'],
+    bestFor: '适合文化爱好者、摄影爱好者',
+    steps: [
+      { time: '09:00', place: '南岗千年瑶寨景区古寨门', lat: 24.582012, lng: 112.301194, activity: '抵达千年瑶寨古寨门，热情好客的瑶族乡亲以传统的拦门酒仪式迎接远道而来的客人。三声铜锣响过，一碗香甜的糯米酒下肚，你的瑶寨之旅正式开启。', tip: '拦门酒度数不高但后劲足，不胜酒力的朋友浅尝即可；寨门前有一段石板坡，穿防滑鞋更安心。' },
+      { time: '10:00', place: '南岗千年瑶寨景区-千年瑶寨', lat: 24.582918, lng: 112.301040, activity: '走进寨中核心区域，这里陈列着瑶族服饰、银饰、长鼓和古老的生产工具。导览员会讲述「盘王节」的传说和瑶族迁徙的千年历史，让人对这一古老民族肃然起敬。', tip: '室内光线偏暗，拍照请关闭闪光灯保护展品；推婴儿车可从侧门斜坡进入。' },
+      { time: '11:30', place: '南岗千年瑶寨景区-排岗南', lat: 24.580885, lng: 112.303700, activity: '沿着蜿蜒的石板巷道往排岗南方向漫步，两边是依山而建的明清古民居，青砖黛瓦、飞檐翘角。阳光穿过窄巷洒在石板上，每一处转角都是一幅绝佳的人文摄影画面。', tip: '巷道狭窄且有台阶，老人请慢行并扶好栏杆；最佳拍照点在巷道交汇处，上午光线最佳。' },
+      { time: '12:30', place: '瑶驿观景楼餐厅', lat: 24.582399, lng: 112.300351, activity: '在瑶驿观景楼歇脚吃饭，这里视野开阔，可以边吃边俯瞰整个瑶寨。地道的瑶家美食——竹筒饭香气扑鼻、瑶山腊肉肥而不腻、酸汤鱼开胃爽口，还有现打的油茶暖胃驱寒。', tip: '竹筒饭需现烤约20分钟，建议坐下就先点；酸汤鱼微辣，小孩可选清蒸做法。' },
+      { time: '14:00', place: '清远千年瑶寨景区-歌舞广场', lat: 24.582188, lng: 112.301397, activity: '午后的阳光下，瑶族阿哥阿妹在广场上跳起长鼓舞、唱起山歌。舞者身着盛装，银饰叮当作响，节奏明快的鼓点让人忍不住跟着打拍子。游客也可以加入互动环节，学几个瑶族舞步。', tip: '表演约45分钟，带老人的建议提前10分钟到场占座；表演结束后可以和舞者合影。' },
+      { time: '15:30', place: '千层梯田观景台', lat: 24.579551, lng: 112.301863, activity: '登上寨后的梯田观景台，俯瞰整个瑶寨全貌和层层叠叠的梯田。春夏之交水满田畴如明镜，秋季稻浪金黄美不胜收。远山如黛、炊烟袅袅，这一刻你会明白什么叫「望得见山、看得见水、记得住乡愁」。', tip: '观景台有约200级台阶，体力有限的老人可在半山腰的凉亭休息观景；日落前一小时光影最佳。' },
+      { time: '16:30', place: '南岗千年瑶寨景区-古石棺遗址', lat: 24.581583, lng: 112.299583, activity: '最后一站来到古石棺遗址，斑驳的石刻诉说着瑶族先民的故事。回头再看一眼暮色中的古寨——青瓦、炊烟、远山，你会记住这一刻。', tip: '遗址区路面不平，注意脚下；特产店的瑶山蜂蜜和野生香菇值得一买。' }
+    ]
+  }, {
+    id: 'yao-nature',
+    name: '油岭秘境线',
+    summary: '探访更原生态的油岭瑶寨，游客稀少、生活更真，适合想避开人群的深度旅行者。',
+    tags: ['nature', 'family'],
+    bestFor: '户外爱好者、亲子家庭',
+    steps: [
+      { time: '09:30', place: '油岭瑶寨游客中心', lat: 24.612793, lng: 112.288506, activity: '从油岭瑶寨游客中心出发，这里比南岗更安静。先在中心拿一份手绘地图，听工作人员讲讲寨子今天有什么特别活动。', tip: '游客中心有免费地图和洗手间；油岭比南岗海拔稍低，气温略高。' },
+      { time: '10:30', place: '油岭瑶寨', lat: 24.612603, lng: 112.288792, activity: '走进油岭古寨，石子路两旁是未经修饰的老房子。阿婆坐在门槛上晒太阳编竹篓，鸡在巷子里悠闲踱步——这里没有表演，生活本身就是最好的风景。', tip: '寨中路面不太平整，穿防滑鞋；尊重村民隐私，拍照前微笑点头示意。' },
+      { time: '12:00', place: '油岭购销部', lat: 24.613025, lng: 112.288325, activity: '中午在寨中唯一的购销部歇脚。这里卖的不是旅游纪念品，是村民日常用的油盐酱醋。和老板聊聊天，他会告诉你寨子里最近的新鲜事。', tip: '购销部有方便面和饮料，但没有正餐；建议自带午餐或在游客中心提前订便当。' },
+      { time: '14:00', place: '瑶艺缘客栈(连南油岭瑶寨店)', lat: 24.613396, lng: 112.285886, activity: '午后到瑶艺缘客栈的院子里喝茶。老板是本地瑶族人，院子里晒着他自己种的茶叶。坐在竹椅上，看远山如黛、白云悠悠，乡村的午后就该这么慢。', tip: '客栈提供简餐和茶水，也可预约瑶族刺绣体验（约40分钟）。' },
+      { time: '15:30', place: '油岭瑶寨停车场-观景台', lat: 24.613056, lng: 112.289087, activity: '从停车场旁回望整座油岭瑶寨，层层叠叠的吊脚楼依山就势。这个角度拍出的照片经常被误认为是南岗——但这里的天际线更野、更自然。', tip: '观景台风大，备一件防风外套；傍晚光线柔和，适合拍全景。' },
+      { time: '16:30', place: '油岭瑶寨-歌堂坪', lat: 24.612500, lng: 112.288000, activity: '旅程的终点是寨子高处的歌堂坪，一块被踩实的黄土地。每逢节庆这里歌舞喧天，平日只有风吹过草尖的声音。坐下来，把一天的山色和宁静装进心里。', tip: '歌堂坪无遮阳设施，夏天注意防晒；下山路上有公共厕所。' }
+    ]
+  }],
+  '清远英西峰林': [{
+    id: 'yingxi-fallback',
+    name: '峰林探洞线',
+    summary: '骑行峰林走廊，探洞天仙境，登彭家祠俯瞰喀斯特田园画卷。',
+    tags: ['nature', 'food'],
+    bestFor: '户外爱好者、摄影爱好者',
+    steps: [
+      { time: '09:00', place: '英西峰林·峰林晓镇', lat: 24.120534, lng: 112.923815, activity: '在峰林晓镇租一辆单车，沿乡村绿道出发。喀斯特峰林拔地而起，晨雾缠绕山腰，稻田在脚下铺成绿毯——英西的一天从车轮碾过露水的声音开始。', tip: '租车点提供头盔和儿童座椅；建议选山地车，部分路段有碎石。' },
+      { time: '10:30', place: '英西峰林洞天仙境', lat: 24.153515, lng: 112.900945, activity: '探访"华南第一天坑"。乘船穿过巨大的溶洞，钟乳石在灯光下泛着湿润的光泽。阳光从洞口倾泻而下，在水面投下一道金色光柱——当地人说这是"洞天之光"。', tip: '洞内湿滑，老人请扶好栏杆；游船约20分钟一趟，避开正午高峰。' },
+      { time: '12:00', place: '聚客农庄', lat: 24.146708, lng: 112.917198, activity: '午饭在聚客农庄解决。九龙豆腐嫩滑无比——筷子夹起来颤巍巍的，蘸一点酱油就鲜掉眉毛。再点一只峰林走地鸡，皮脆肉香，连骨头都想嚼了吞下去。', tip: '九龙豆腐是当地名片，一定要试试酿豆腐和清蒸豆腐。' },
+      { time: '14:00', place: '彭家祠', lat: 24.185993, lng: 112.901457, activity: '彭家祠建在山坡上，层层往上像一座小布达拉宫。爬到最高处回头望——峰林如竹笋般从平原上冒出来，阳光把它们的影子拉得老长。风从山谷里灌上来，带着稻花香。', tip: '台阶约300级，老年人量力而行，每层都有平台可坐下休息。' },
+      { time: '16:00', place: '英西峰林茶马驿道', lat: 24.232875, lng: 112.886099, activity: '骑行最后一站来到茶马驿道，这里曾是粤北茶商南下的古道。路旁的石板上还有马蹄踩出的凹痕。夕阳把峰林染成金色，整条驿道像一条发光的河。', tip: '傍晚光线柔和最适合拍照；田埂路窄注意安全；回到晓镇还车约需20分钟。' }
+    ]
+  }],
+  '梅州桥溪古村': [{
+    id: 'qiaoxi-fallback',
+    name: '客家茶田线',
+    summary: '探访桥溪古韵，漫步雁南飞茶田，在围龙屋与茶香之间感受客家慢生活。',
+    tags: ['history', 'food'],
+    bestFor: '文化爱好者、美食爱好者',
+    steps: [
+      { time: '09:30', place: '雁南飞茶田景区-桥溪古韵', lat: 24.372250, lng: 116.372194, activity: '桥溪古村藏在雁南飞茶田深处，青石板路两旁是上百年历史的围龙屋。清晨的茶田上浮着一层薄雾，采茶人的竹篓在绿浪间时隐时现——客家人的一天从一杯单丛茶开始。', tip: '村口有免费停车场和洗手间；古村不大，步行游览约1小时。' },
+      { time: '10:30', place: '雁南飞茶田景区-茶情阁', lat: 24.381734, lng: 116.370457, activity: '走进茶情阁，茶艺师正在冲泡今年的春茶。她手腕轻轻一转，琥珀色的茶汤落入白瓷杯中，香气直扑脸上。学着她的样子闻香、品味、回甘——原来一杯茶可以喝出三层味道。', tip: '茶情阁提供免费品茶，也有付费茶艺体验（约30分钟）；茶叶可购买带走。' },
+      { time: '12:00', place: '丽珠农家乐', lat: 24.375814, lng: 116.370401, activity: '午饭在丽珠农家乐。老板娘端出盐焗鸡——撕开锡纸的一瞬间，咸香混着沙姜的味道冲出来，鸡肉嫩得筷子一夹就散。再配一碗客家酿豆腐和现炒的茶园时蔬，简单却满足。', tip: '盐焗鸡是招牌但需提前预订；酿豆腐里的肉馅是猪肉+虾米，不吃猪肉的提前说。' },
+      { time: '14:00', place: '雁南飞茶田景区-雁鹅湖', lat: 24.379980, lng: 116.366036, activity: '午后绕雁鹅湖散步，湖面平静得像一面镜子，倒映着周围的茶田和远山。白鹭从芦苇丛中飞起，慢悠悠地扇着翅膀。找一个湖边的长椅坐下——客家山歌从远处隐约飘来。', tip: '环湖步道约1.5公里，路面平坦适合老人小孩；湖边有凉亭可以歇脚。' },
+      { time: '16:00', place: '灵光寺', lat: 24.399859, lng: 116.402952, activity: '最后一站来到灵光寺，这座千年古刹藏在深山中。大雄宝殿前的两棵古柏据说是开山祖师手植，树干粗得三个人才能合抱。暮鼓声在山谷里回荡，一天的旅程在钟声中慢慢收尾。', tip: '灵光寺距桥溪约3公里，建议开车前往；寺内有免费香火，不需另购。' }
+    ]
+  }],
+  '韶关丹霞夏富村': [{
+    id: 'xiafu-fallback',
+    name: '丹霞田园线',
+    summary: '探访丹霞山下的夏富古村，红色砂岩与绿色田园交织，在锦江边感受世界遗产的乡村一面。',
+    tags: ['nature', 'history'],
+    bestFor: '自然爱好者、摄影爱好者',
+    steps: [
+      { time: '09:00', place: '夏富古村', lat: 25.004745, lng: 113.712817, activity: '从夏富古村口出发，这座丹霞山脚下的小村庄安静得像被时间遗忘。青砖老屋的墙上爬满藤蔓，老人在祠堂门口晒着太阳择菜。脚下的石板路被磨得发亮——多少人走过才能磨出这样的光泽。', tip: '村口有导览图和公共厕所；村里没有商业街，自备水和零食。' },
+      { time: '10:00', place: '夏富李氏宗祠', lat: 25.003760, lng: 113.711675, activity: '李氏宗祠是村中保存最好的古建筑，门楣上的木雕虽然褪了色，但人物的眉眼还清晰可辨。祠堂天井里养着一缸荷花，阳光从瓦缝间漏下来洒在水面上，安静得能听见自己的呼吸。', tip: '祠堂仍在日常使用，参观时保持安静；门口的台阶较高，老人注意脚下。' },
+      { time: '12:00', place: '仁化县夏富村山卡拉农家', lat: 25.005974, lng: 113.709862, activity: '中午在山卡拉农家歇脚。老板从灶房端出一锅丹霞山坑螺焖鸡——坑螺是锦江里捞的，鸡肉是自家养的走地鸡，焖在一起鲜得让人想把锅底都刮干净。', tip: '坑螺焖鸡制作约30分钟，坐下先下单；锦江河鱼也是招牌，可清蒸或红烧。' },
+      { time: '14:00', place: '丹霞山观景步道', lat: 24.991725, lng: 113.700125, activity: '从夏富村沿锦江步行约2公里，进入丹霞山观景步道。红色砂岩的纹理像是大地的年轮，每一步都能看到不同的造型。停下来仔细看——岩壁上还有古人刻的字，被风雨磨得模模糊糊。', tip: '步道全程约3公里有少量台阶；江边风大注意保暖；带望远镜可以看到岩壁上的古人题刻。' },
+      { time: '16:30', place: '丹霞山·栖霞居度假民宿', lat: 24.994772, lng: 113.694792, activity: '旅途的终点是锦江边的栖霞居。坐在江边的露台上，看夕阳把丹霞山的红岩染得更红。江水缓缓流过，对岸的炊烟升起来——世界遗产下的乡村一天，就在这幅画里慢慢暗下来。', tip: '栖霞居提供晚餐和住宿，锦江江景房需提前预订；不入住也可以在露台喝茶看日落。' }
+    ]
+  }]
+};
+const state = {
+  destination: '清远千年瑶寨',
+  peopleCount: 2,
+  hasElderly: false,
+  hasChildren: false,
+  interests: ['nature'],
+  duration: 'full',
+  customDays: 1,
+  accommodation: null, // { name, lat, lng, source: 'poi'|'custom' }
+  routeVariation: 0,
+  mapInstance: null,
+  isGenerating: false
+};
+
+// ==================== DOM 引用 ====================
+const $ = (sel) => document.querySelector(sel);
+
+const settingsToggle = $('#settingsToggle');
+const settingsPanel = $('#settingsPanel');
+const apiBaseUrlInput = $('#apiBaseUrl');
+const apiKeyInput = $('#apiKey');
+const apiModelInput = $('#apiModel');
+const amapApiKeyInput = $('#amapApiKey');
+const saveSettingsBtn = $('#saveSettings');
+const clearSettingsBtn = $('#clearSettings');
+const settingsStatus = $('#settingsStatus');
+
+const destInput = $('#destInput');
+const destPresets = $('#destPresets');
+const peopleCount = $('#peopleCount');
+const hasElderlyBtn = $('#hasElderly');
+const hasChildrenBtn = $('#hasChildren');
+const interestTags = $('#interestTags');
+const durationGroup = $('#durationGroup');
+const generateBtn = $('#generateBtn');
+
+const loadingOverlay = $('#loadingOverlay');
+const loadingPhase = $('#loadingPhase');
+const loadingSub = $('#loadingSub');
+const loadingIcon = $('#loadingIcon');
+
+const errorCard = $('#errorCard');
+const errorIcon = $('#errorIcon');
+const errorTitle = $('#errorTitle');
+const errorMsg = $('#errorMsg');
+
+const resultSection = $('#resultSection');
+const tripHeader = $('#tripHeader');
+const timeline = $('#timeline');
+const aiBadge = $('#aiBadge');
+const switchBtn = $('#switchBtn');
+const switchHint = $('#switchHint');
+const backBtn = $('#backBtn');
+const formCard = $('#formCard');
+const accommodationSelect = $('#accommodationSelect');
+const accommodationCustom = $('#accommodationCustom');
+const accommodationCustomBtn = $('#accommodationCustomBtn');
+const accommodationStatus = $('#accommodationStatus');
+
+// ==================== 设置管理 ====================
+function getSettings() {
+  try {
+    const raw = localStorage.getItem('xiangye_settings');
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveSettings(settings) {
+  localStorage.setItem('xiangye_settings', JSON.stringify(settings));
+}
+
+function hasApiConfig() {
+  const s = getSettings();
+  return !!(s.baseUrl && s.apiKey && s.model);
+}
+
+function loadSettingsToForm() {
+  const s = getSettings();
+  apiBaseUrlInput.value = s.baseUrl || '';
+  apiKeyInput.value = s.apiKey || '';
+  apiModelInput.value = s.model || '';
+  amapApiKeyInput.value = s.amapKey || '';
+  updateSettingsIndicator();
+}
+
+function hasAmapKey() {
+  const s = getSettings();
+  return !!(s.amapKey);
+}
+
+function getAmapKey() {
+  const s = getSettings();
+  return s.amapKey || 'f4b7b60ff530d7373a28d8d01a518d07'; // 默认内置 key
+}
+
+function updateSettingsIndicator() {
+  if (hasApiConfig()) {
+    settingsToggle.classList.add('has-config');
+  } else {
+    settingsToggle.classList.remove('has-config');
+  }
+}
+
+// 设置面板 toggle
+settingsToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+  settingsPanel.classList.toggle('show');
+});
+
+// 点击外部关闭
+document.addEventListener('click', (e) => {
+  if (!settingsPanel.contains(e.target) && e.target !== settingsToggle) {
+    settingsPanel.classList.remove('show');
+  }
+});
+
+settingsPanel.addEventListener('click', (e) => e.stopPropagation());
+
+// 关闭按钮：点击面板外部或按 Esc
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') settingsPanel.classList.remove('show');
+});
+
+// 保存设置
+saveSettingsBtn.addEventListener('click', () => {
+  const baseUrl = apiBaseUrlInput.value.trim();
+  const apiKey = apiKeyInput.value.trim();
+  const model = apiModelInput.value.trim();
+  const amapKey = amapApiKeyInput.value.trim();
+
+  saveSettings({ baseUrl, apiKey, model, amapKey });
+  updateSettingsIndicator();
+  const hasAI = !!(baseUrl && apiKey && model);
+  const hasAmap = !!amapKey;
+  let msg = '✅ 配置已保存：';
+  if (hasAI) msg += ' AI 生成 /';
+  if (hasAmap) msg += ' 高德地图 /';
+  if (!hasAI && !hasAmap) msg += ' 将使用内置示例数据';
+  settingsStatus.textContent = msg.replace(/\/$/, '');
+  settingsStatus.className = 'status success show';
+
+  setTimeout(() => {
+    settingsStatus.className = 'status';
+  }, 2000);
+});
+
+// 清除设置
+clearSettingsBtn.addEventListener('click', () => {
+  localStorage.removeItem('xiangye_settings');
+  apiBaseUrlInput.value = '';
+  apiKeyInput.value = '';
+  apiModelInput.value = '';
+  amapApiKeyInput.value = '';
+  updateSettingsIndicator();
+  settingsStatus.textContent = '🗑️ 配置已清除，将使用示例行程数据';
+  settingsStatus.className = 'status info show';
+  setTimeout(() => { settingsStatus.className = 'status'; }, 2000);
+});
+
+// ==================== 缓存管理 ====================
+function getCacheKey() {
+  const parts = [
+    state.destination,
+    state.interests.sort().join(','),
+    state.duration,
+    state.peopleCount,
+    state.hasElderly ? 'elderly' : '',
+    state.hasChildren ? 'children' : '',
+    'v' + state.routeVariation
+  ];
+  return 'xiangye_cache_' + parts.filter(Boolean).join('|');
+}
+
+function getCachedTrip() {
+  try {
+    const raw = localStorage.getItem(getCacheKey());
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    // 缓存有效期 7 天
+    if (Date.now() - data.timestamp > 7 * 24 * 60 * 60 * 1000) {
+      localStorage.removeItem(getCacheKey());
+      return null;
+    }
+    return data.trip;
+  } catch { return null; }
+}
+
+function setCachedTrip(trip) {
+  try {
+    localStorage.setItem(getCacheKey(), JSON.stringify({
+      trip,
+      timestamp: Date.now()
+    }));
+  } catch (e) {
+    // localStorage 满了，清理旧缓存
+    clearOldCache();
+  }
+}
+
+function clearOldCache() {
+  const keys = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('xiangye_cache_')) keys.push(k);
+  }
+  // 保留最近 20 条
+  if (keys.length > 20) {
+    keys.sort();
+    keys.slice(0, keys.length - 20).forEach(k => localStorage.removeItem(k));
+  }
+}
+
+// ==================== AI 系统提示词 ====================
+function buildSystemPrompt() {
+  return `你是一位深谙广东乡土文化的乡村旅行规划师，名字叫"乡野老陈"。
+你在广东农村生活了大半辈子，走遍了岭南几百个古村。
+
+你有三个高德地图工具可以调用。你必须主动使用它们来获取真实的地理数据，
+然后基于真实数据规划一份有画面感、有温度的乡村旅行行程。
+
+══════════════════════════════════════
+  工作流程
+══════════════════════════════════════
+
+第 0 步（最重要）：确认行程起点
+  用户会在消息中给出住宿地点（名称 + 坐标），以此为行程起点。
+  起点的 place = 用户提供的住宿名称，lat/lng = 用户提供的坐标。
+  起点是行程的第 1 个节点，时间设为早上出发时间（如 08:30）。
+  起点的 activity 写起床、早餐、准备出发的场景。
+
+第 1 步：调用 amap_text_search 搜索景区内部子地点。
+第 2 步：调用 amap_around_search 搜索住宿点周边的餐饮和服务设施。
+第 3 步：如需确认坐标，调用 amap_geocode。
+第 4 步：从住宿起点出发规划行程并输出 JSON。
+
+══════════════════════════════════════
+  铁律
+══════════════════════════════════════
+
+1. 每个节点的 place 和 lat/lng 必须来自工具返回的 POI，不许编造
+2. 首尾闭环：第 1 个节点 = 住宿出发，最后 1 个节点 = 返回同一住宿。
+   多日行程：每天的最后节点和次日第一节点都是同一住宿，
+   place 名称必须一字不差地一致，lat/lng 完全一致。
+3. 除首尾住宿外，中间节点**只能**是游览景点、文化场所、自然景观、
+   餐饮店铺或体验类场所（如茶园、手工作坊）。
+   **绝对禁止**将以下类型作为行程节点：
+   - 公交站、停车场、加油站、收费站
+   - 政府机构（村委会、党群中心、服务站）
+   - 公共厕所（可在 tip 里提及，不作为独立节点）
+   - 任何没有可玩性的服务设施
+4. 时间合理：最后一个户外游览节点不晚于 18:30，
+   返回住宿节点不晚于 20:00。晚上不安排任何户外景点
+
+5. POI 不够填节点数时用"周边自由探索" + 最近 POI 坐标填充
+6. place 可加 ≤4 字方位前缀，不准改核心名称
+7. 餐饮 POI 不足时 tip 建议"自备干粮"，不杜撰店名
+
+══════════════════════════════════════
+  写作法则
+══════════════════════════════════════
+
+❌ "瑶寨吊脚楼群建于明代，依山而建，气势恢宏。"
+✅ "踩着磨得发亮的石板路往上走，瑶家阿婆坐在吊脚楼木廊上绣花，
+  脚下层层青瓦像鱼鳞一样铺开，云雾漫到半山腰。"
+
+每段 activity：视觉细节 + 声音/气味 + 人的动作/对话。用"你"来写。
+
+══════════════════════════════════════
+  结构规则
+══════════════════════════════════════
+
+【规则 1：节点间距 —— 最重要】
+- 相邻两个节点的步行距离不得超过 800 米。
+- 如果路段有台阶或坡度，缩减到 ≤ 500 米。
+- 安排节点时，利用工具返回的坐标计算经纬度差值来估算距离：
+  纬度差 × 111320 ≈ 南北米数，经度差 × 111320 × cos(当地纬度) ≈ 东西米数。
+- 如果两个 POI 间距超过 800 米，不要把它们安排为相邻节点——
+  要么插入一个中间 POI，要么在 tip 中标注"这段路较长（约 X 米），
+  建议中途在树荫/石凳歇脚"。
+- 每隔 3 个节点必须有一个明确标注"可坐下休息"的地点。
+
+【规则 2：季节适配】
+- 夏季（5-9 月）：12:00-14:30 安排室内或浓密树荫下的项目。
+- 雨季（3-6 月）：户外节点的 tip 中给出雨天备选方案。
+- 冬季（12-2 月）：17:00 前结束最后一个户外节点。
+
+【规则 3：适老适幼】
+- 有老人：台阶 ≤ 50 级、100 米内有座位、连续步行 ≤ 20 分钟。
+- 有小孩：每 3 节点至少 1 个互动项目、tip 标注厕所和零食。
+
+══════════════════════════════════════
+  输出格式
+══════════════════════════════════════
+
+严格输出 JSON（不要 markdown 代码块）：
+
+{
+  "title": "行程标题，8 字以内",
+  "summary": "一句话概括，20 字以内",
+  "steps": [
+    {
+      "time": "09:00",
+      "place": "POI 名称（可加 ≤4 字方位前缀）",
+      "activity": "3-4 句话，视觉 + 声音 + 人的温度",
+      "tip": "路况、穿着、最佳时间、避坑、厕所",
+      "lat": 24.6230,
+      "lng": 112.3500
+    }
+  ]
+}
+节点数：半天 4-5 / 一天 6-7 / 两天一夜 8-10
+
+══════════════════════════════════════
+  负面清单
+══════════════════════════════════════
+
+✕ "位于/地处/建于/国家X级景区/被誉为/素有…之称"
+✕ "景色宜人/美不胜收/流连忘返/具有很高的…价值"
+✕ "游客可以…"（用"你"）/ "品尝当地特色美食"（说具体店名菜名）`;
+}
+
+function buildUserPrompt(variation = 0) {
+  const interestMap = {
+    history: '历史文化', nature: '自然风光',
+    food: '美食体验', family: '亲子研学'
+  };
+
+  const days = state.customDays || (state.duration === 'two' ? 2 : state.duration === 'three' ? 3 : 1);
+  const isMultiDay = days > 1;
+  const durationText = isMultiDay ? `${days} 天 ${days - 1} 夜` : '一天';
+  const interestText = state.interests.map(t => interestMap[t] || t).join('、');
+  const groupText = `${state.peopleCount}人出行` +
+    (state.hasElderly ? '，有 60 岁以上老人——减少台阶、增加休息点' : '') +
+    (state.hasChildren ? '，有 12 岁以下小孩——增加互动体验项目' : '');
+
+  let variationText = '';
+  if (variation > 0) {
+    variationText = `\n另外：这是第 ${variation + 1} 次为这个目的地规划路线，请生成一套与之前不同的方案。`;
+  }
+
+  let accText = '';
+  if (state.accommodation && state.accommodation.name) {
+    const a = state.accommodation;
+    accText = `\n🏠 住宿：「${a.name}」`;
+    if (a.lat && a.lng) accText += `，坐标：${a.lat}, ${a.lng}`;
+    if (a.source === 'custom') accText += '（用户手动输入）';
+    accText += '\n第 1 个节点 = 从此住宿出发，最后 1 个节点 = 返回此住宿。';
+    if (isMultiDay) {
+      accText += `\n⚠️ 这是${durationText}的行程。每晚都必须回到「${a.name}」住宿。每天的最后节点和次日的第一节点都是这个住宿。住宿名称必须一致，坐标必须一致。`;
+    }
+    accText += '\n';
+  }
+
+  const multiDayNote = isMultiDay
+    ? `\n这是${durationText}行程（${days} 天 ${days - 1} 夜）。每天 5-7 个节点。每晚回到住宿，次日从住宿重新出发。住宿节点名称始终一致。`
+    : '';
+
+  return `请为「${state.destination}」规划一份${durationText}的乡村旅行行程。
+${accText}
+${groupText}
+兴趣偏好：${interestText}${multiDayNote}
+${variationText}
+
+请严格按照工作流程：先确认起点，再搜索目的地 POI，最后从起点出发规划路线并输出 JSON。`;
+}
+
+// ==================== 高德工具定义 ====================
+const AMAP_TOOLS = [
+  { type: 'function', function: { name: 'amap_text_search', description: '在高德地图中按关键词搜索 POI。用于查找景区内部子地点——搜"南岗瑶寨"会返回"南岗瑶寨-龙眉坡""千年瑶寨-歌堂坪"等景区内所有已收录地点。这是行程规划的核心数据来源。', parameters: { type: 'object', properties: { keywords: { type: 'string', description: '搜索关键词，如"南岗瑶寨""英西峰林"。去掉省市前缀，用景区核心名称。' }, city: { type: 'string', description: '可选，限定城市，如"清远"' } }, required: ['keywords'] } } },
+  { type: 'function', function: { name: 'amap_around_search', description: '搜索某个坐标周边的 POI。**只能搜游览类**：景点、餐厅、农家乐、茶馆、手工作坊、采摘园。不要搜公交站、停车场、厕所、政府机构等不可玩的地点。', parameters: { type: 'object', properties: { location: { type: 'string', description: '中心坐标，格式"经度,纬度"' }, keywords: { type: 'string', description: '只搜可玩类别：景点|餐厅|农家乐|茶馆|手工作坊|采摘园|古村|古树。多个用|分隔' }, radius: { type: 'number', description: '搜索半径（米），默认 3000' } }, required: ['location'] } } },
+  { type: 'function', function: { name: 'amap_geocode', description: '将地名转为经纬度坐标。用于确认某地的精确位置。', parameters: { type: 'object', properties: { address: { type: 'string', description: '地址或地名' }, city: { type: 'string', description: '可选，限定城市' } }, required: ['address'] } } }
+];
+
+// ==================== 工具执行 ====================
+async function executeAmapTool(name, args) {
+  const key = getAmapKey();
+  const params = { ...args, key };
+  switch (name) {
+    case 'amap_text_search': {
+      const data = await amapFetch('/place/text', { keywords: args.keywords, city: args.city || '', offset: 20, page: 1, extensions: 'all' });
+      return { count: (data.pois || []).length, pois: (data.pois || []).map(p => ({ name: p.name, type: p.type, address: p.address, location: p.location, distance: parseInt(p.distance) || 0 })) };
+    }
+    case 'amap_around_search': {
+      const data = await amapFetch('/place/around', { location: args.location, keywords: args.keywords || '', radius: args.radius || 3000, offset: 20, page: 1, extensions: 'all' });
+      return { count: (data.pois || []).length, pois: (data.pois || []).map(p => ({ name: p.name, type: p.type, address: p.address, location: p.location, distance: parseInt(p.distance) || 0 })) };
+    }
+    case 'amap_geocode': {
+      const data = await amapFetch('/geocode/geo', { address: args.address, city: args.city || '' });
+      return { count: (data.geocodes || []).length, geocodes: (data.geocodes || []).map(g => { const [lng, lat] = g.location.split(',').map(Number); return { name: g.formatted_address || g.name, lng, lat, adcode: g.adcode }; }) };
+    }
+    default: return { error: '未知工具: ' + name };
+  }
+}
+
+// ==================== AI 调用（Function Calling 多轮对话）====================
+async function callAIWithTools(userPrompt) {
+  const settings = getSettings();
+  if (!settings.baseUrl || !settings.apiKey || !settings.model) throw new Error('NO_CONFIG');
+
+  let baseUrl = settings.baseUrl.replace(/\/+$/, '');
+  if (!baseUrl.endsWith('/v1') && !baseUrl.includes('/chat/completions')) baseUrl += '/v1';
+  const endpoint = baseUrl + '/chat/completions';
+
+  const messages = [
+    { role: 'system', content: buildSystemPrompt() },
+    { role: 'user', content: userPrompt }
+  ];
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
+
+  try {
+    for (let turn = 0; turn < 6; turn++) {
+      const body = { model: settings.model, messages, temperature: state.routeVariation > 0 ? 1.0 : 0.8, max_tokens: 4096 };
+      if (turn < 4) { body.tools = AMAP_TOOLS; body.tool_choice = 'auto'; }
+
+      const resp = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.apiKey}` },
+        body: JSON.stringify(body),
+        signal: controller.signal
+      });
+
+      if (!resp.ok) {
+        const et = await resp.text().catch(() => '');
+        if (resp.status === 401 || resp.status === 403) throw new Error('API Key 无效');
+        if (resp.status === 429) throw new Error('请求太频繁，稍等片刻');
+        throw new Error(`AI 错误 ${resp.status}${et ? ': ' + et.slice(0, 200) : ''}`);
+      }
+
+      const data = await resp.json();
+      const msg = data.choices?.[0]?.message;
+      if (!msg) throw new Error('AI 返回空响应');
+
+      // 有工具调用 → 执行并继续
+      if (msg.tool_calls && msg.tool_calls.length > 0) {
+        messages.push(msg);
+        for (const tc of msg.tool_calls) {
+          const fnName = tc.function.name;
+          let fnArgs = {};
+          try { fnArgs = JSON.parse(tc.function.arguments || '{}'); } catch {}
+          console.log(`🔧 AI 调用工具: ${fnName}`, JSON.stringify(fnArgs, null, 2));
+          console.log(`   → 原始 arguments:`, tc.function.arguments);
+          loadingPhase.textContent = fnName === 'amap_text_search' ? `高德搜索"${fnArgs.keywords || ''}"…` : fnName === 'amap_around_search' ? '搜索周边设施…' : `定位"${fnArgs.address || ''}"…`;
+
+          const result = await executeAmapTool(fnName, fnArgs);
+          console.log(`   → ${result.count || 0} 条`);
+
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) });
+        }
+        continue;
+      }
+
+      // 无工具调用 → 最终输出
+      clearTimeout(timeoutId);
+      const content = msg.content;
+      if (!content) throw new Error('AI 返回空内容');
+      return content;
+    }
+    throw new Error('AI 工具调用轮次过多');
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === 'AbortError') throw new Error('请求超时，请重试');
+    throw err;
+  }
+}
+
+// ==================== JSON 解析 & 校验 ====================
+function parseAIResponse(content) {
+  // 尝试多种方式提取 JSON
+  let jsonStr = content.trim();
+
+  // 去掉可能的 markdown 代码块
+  const codeBlockMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (codeBlockMatch) {
+    jsonStr = codeBlockMatch[1].trim();
+  }
+
+  // 尝试找到 JSON 对象边界
+  const objStart = jsonStr.indexOf('{');
+  const objEnd = jsonStr.lastIndexOf('}');
+  if (objStart !== -1 && objEnd !== -1 && objEnd > objStart) {
+    jsonStr = jsonStr.slice(objStart, objEnd + 1);
+  }
+
+  let data;
+  try {
+    data = JSON.parse(jsonStr);
+  } catch {
+    throw new Error('AI 返回的数据格式不太对，老乡可能喝多了，请再问一次。');
+  }
+
+  // 校验结构
+  if (!data.steps || !Array.isArray(data.steps) || data.steps.length === 0) {
+    throw new Error('AI 返回的行程数据不完整，请再试一次。');
+  }
+
+  // 校验每个 step
+  const validSteps = data.steps.filter(s =>
+    s.time && s.place && s.activity && s.tip &&
+    typeof s.lat === 'number' && typeof s.lng === 'number'
+  );
+
+  if (validSteps.length === 0) {
+    throw new Error('AI 返回的行程数据格式有误，请再试一次。');
+  }
+
+  return {
+    title: data.title || `${state.destination}之旅`,
+    summary: data.summary || `一份为你的${state.destination}之行精心规划的行程`,
+    steps: validSteps,
+    isAIGenerated: true
+  };
+}
+
+// ==================== Loading 动画 ====================
+function showLoading(msg) {
+  loadingOverlay.classList.add('show');
+  resultSection.classList.remove('show');
+  errorCard.classList.remove('show');
+  formCard.style.opacity = '0.6';
+  formCard.style.pointerEvents = 'none';
+  generateBtn.disabled = true;
+  generateBtn.textContent = '⏳ 生成中…';
+  loadingIcon.textContent = '🔍';
+  if (msg) {
+    loadingPhase.textContent = msg;
+    loadingSub.textContent = '';
+  }
+}
+
+function hideLoading() {
+  loadingOverlay.classList.remove('show');
+  formCard.style.opacity = '1';
+  formCard.style.pointerEvents = '';
+  generateBtn.disabled = false;
+  generateBtn.textContent = '✨ 生成行程';
+}
+
+// ==================== 错误处理 ====================
+function showError(title, msg, icon = '🌄') {
+  hideLoading();
+  errorCard.classList.add('show');
+  resultSection.classList.remove('show');
+  errorIcon.textContent = icon;
+  errorTitle.textContent = title;
+  errorMsg.textContent = msg;
+  errorCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function hideError() {
+  errorCard.classList.remove('show');
+}
+
+// ==================== 显示行程 ====================
+function displayTrip(tripData) {
+  hideLoading();
+  hideError();
+
+  const interestMap = {
+    history: '历史文化', nature: '自然风光',
+    food: '美食体验', family: '亲子研学'
+  };
+
+  const days = state.customDays || (state.duration === 'two' ? 2 : state.duration === 'three' ? 3 : 1);
+  const durationLabel = days > 1 ? `${days} 天 ${days - 1} 夜` : '一天';
+  const interestLabels = state.interests.map(t => interestMap[t] || t);
+  const steps = tripData.steps;
+
+  // Header
+  tripHeader.innerHTML = `
+    <div class="route-badge">${tripData.source === 'ai+amap' ? '🤖 AI + 🗺️ 高德' : tripData.source === 'amap' ? '🗺️ 高德地图' : tripData.isAIGenerated ? '🤖 AI 定制' : '📋 示例行程'}</div>
+    <h2>${state.destination}</h2>
+    <p class="trip-summary">${tripData.title || ''} · ${tripData.summary || ''}</p>
+    <div class="trip-meta">
+      <span class="meta-item">⏱️ ${durationLabel}</span>
+      <span class="meta-item">👥 ${state.peopleCount}人${state.hasElderly ? ' · 含老人' : ''}${state.hasChildren ? ' · 含小孩' : ''}</span>
+      ${interestLabels.map(t => `<span class="meta-item">❤️ ${t}</span>`).join('')}
+    </div>
+  `;
+
+  // Timeline — 第一个节点如果是住宿起点，用 🏠 样式
+  const isAccStart = state.accommodation && steps.length > 0 &&
+    (steps[0].place.includes(state.accommodation.name) || steps[0].isAccommodation);
+
+  timeline.innerHTML = steps.map((step, i) => {
+    const isFirstAcc = i === 0 && (isAccStart || step.isAccommodation);
+    const dotStyle = isFirstAcc
+      ? 'background:var(--accent);box-shadow:0 0 0 2px var(--accent-light);font-size:16px;line-height:28px;text-align:center;'
+      : (step.isAccommodation ? 'background:var(--accent);box-shadow:0 0 0 2px var(--accent-light);' : '');
+    return `
+    <div class="timeline-item${isFirstAcc ? ' timeline-start' : ''}">
+      <div class="timeline-time">${step.time}</div>
+      <div class="timeline-dot" style="${dotStyle}">${isFirstAcc ? '🏠' : ''}</div>
+      <div class="timeline-content">
+        <h4>${step.place}</h4>
+        <p class="activity">${step.activity}</p>
+        <p class="tip">${step.tip}</p>
+      </div>
+    </div>`;
+  }).join('');
+
+  // AI badge
+  const isRealData = tripData.source === 'ai+amap' || tripData.source === 'amap';
+  const isAI = tripData.source === 'ai+amap' || tripData.isAIGenerated;
+  aiBadge.style.display = (isRealData || isAI) ? 'flex' : 'none';
+  if (tripData.source === 'ai+amap') {
+    aiBadge.innerHTML = '<span class="ai-dot"></span> AI 生成 + 高德地图真实数据，仅供参考';
+  } else if (tripData.source === 'amap') {
+    aiBadge.innerHTML = '<span class="ai-dot" style="background:var(--accent);"></span> 基于高德地图真实 POI 数据，仅供参考';
+  } else if (tripData.isAIGenerated) {
+    aiBadge.innerHTML = '<span class="ai-dot"></span> 由 AI 生成，仅供参考';
+  }
+
+  // Switch hint
+  switchHint.textContent = isRealData
+    ? '基于实时地理数据，重新搜索周边生成新路线'
+    : isAI
+      ? '让 AI 为你重新规划一条不同的路线'
+      : '配置 AI 和高德接口后，可以生成更丰富的真实路线';
+
+  // Map
+  setTimeout(() => renderMap(steps), 150);
+
+  // 无障碍高亮
+  if (state.hasElderly || state.hasChildren) {
+    setTimeout(() => {
+      timeline.querySelectorAll('.timeline-content .tip').forEach(tip => {
+        if (tip.textContent.includes('台阶') || tip.textContent.includes('陡') || tip.textContent.includes('注意')) {
+          tip.style.borderLeft = '3px solid var(--accent)';
+        }
+      });
+    }, 50);
+  }
+
+  // Show
+  resultSection.classList.add('show');
+  resultSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ==================== 地图 ====================
+function renderMap(steps) {
+  if (state.mapInstance) {
+    state.mapInstance.remove();
+    state.mapInstance = null;
+  }
+
+  const map = L.map('map', {
+    attributionControl: true,
+    zoomControl: true
+  });
+
+  // 高德卫星图 + 路网标注（双层叠加）
+  // Layer 1: 卫星影像底图
+  L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?style=6&x={x}&y={y}&z={z}', {
+    subdomains: ['1', '2', '3', '4'],
+    maxZoom: 18
+  }).addTo(map);
+
+  // Layer 2: 透明路网 + 地名标注叠加
+  L.tileLayer('https://webst0{s}.is.autonavi.com/appmaptile?style=8&x={x}&y={y}&z={z}', {
+    subdomains: ['1', '2', '3', '4'],
+    maxZoom: 18
+  }).addTo(map);
+
+  // 统一的 attribution（只挂在一个不可见的 layer 上也可以，这里用地图控件直接设置）
+  map.attributionControl.setPrefix('');
+  map.attributionControl.addAttribution('&copy; <a href="https://www.amap.com/">高德地图</a>');
+
+  const bounds = [];
+
+  steps.forEach((step, i) => {
+    if (typeof step.lat !== 'number' || typeof step.lng !== 'number') return;
+
+    L.marker([step.lat, step.lng], {
+      icon: L.divIcon({
+        className: 'custom-marker',
+        html: `<div style="
+          width: 28px; height: 28px;
+          background: ${step.isAccommodation ? '#D4943A' : '#4A7C59'};
+          border: 3px solid white;
+          border-radius: 50%;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+          display: flex; align-items: center; justify-content: center;
+          color: white; font-size: 12px; font-weight: 700;
+          font-family: 'Noto Sans SC', sans-serif;
+        ">${i + 1}</div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14]
+      })
+    }).addTo(map)
+      .bindPopup(`
+        <div style="font-family: 'Noto Sans SC', sans-serif; max-width: 200px;">
+          <strong style="color: #4A7C59;">${step.time}</strong>
+          <span style="color: #5C4033; margin-left: 6px;">${step.place}</span>
+          <p style="font-size: 12px; color: #6B5F52; margin-top: 4px; line-height: 1.4;">
+            ${step.activity.slice(0, 60)}...
+          </p>
+        </div>
+      `);
+
+    bounds.push([step.lat, step.lng]);
+  });
+
+  if (steps.length > 1) {
+    const latlngs = steps.filter(s => typeof s.lat === 'number').map(s => [s.lat, s.lng]);
+    if (latlngs.length > 1) {
+      L.polyline(latlngs, {
+        color: '#4A7C59',
+        weight: 3,
+        opacity: 0.7,
+        dashArray: '8, 6',
+        lineCap: 'round',
+        lineJoin: 'round'
+      }).addTo(map);
+    }
+  }
+
+  if (bounds.length > 0) {
+    map.fitBounds(bounds, { padding: [30, 30] });
+  }
+
+  state.mapInstance = map;
+  setTimeout(() => map.invalidateSize(), 200);
+}
+
+// ==================== 高德地图 API ====================
+function amapFetch(path, params = {}) {
+  return new Promise((resolve, reject) => {
+    const key = getAmapKey();
+    const base = 'https://restapi.amap.com/v3';
+    const sep = path.includes('?') ? '&' : '?';
+    let url = base + path + sep + 'key=' + encodeURIComponent(key);
+    for (const [k, v] of Object.entries(params)) {
+      if (v !== undefined && v !== '') url += '&' + k + '=' + encodeURIComponent(String(v));
+    }
+    // JSONP：绕过 file:// 的 CORS 限制
+    const cbName = '_amap_cb_' + Date.now();
+    url += '&callback=' + cbName;
+
+    console.log('🌐 高德 JSONP:', url.replace(key, 'KEY'));
+
+    const script = document.createElement('script');
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error('高德 API 超时'));
+    }, 15000);
+
+    const cleanup = () => {
+      clearTimeout(timeout);
+      delete window[cbName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+    };
+
+    window[cbName] = function(data) {
+      cleanup();
+      if (data.status !== '1' && data.infocode !== '10000') {
+        reject(new Error(`高德 API (${data.infocode}): ${data.info}`));
+        return;
+      }
+      resolve(data);
+    };
+
+    script.src = url;
+    script.onerror = () => {
+      cleanup();
+      reject(new Error('高德 API 网络错误'));
+    };
+    document.head.appendChild(script);
+  });
+}
+
+async function geocodeDestination(placeName) {
+  // 尝试加广东前缀提高命中率
+  let data = await amapFetch('/geocode/geo', { address: placeName });
+  if (!data.geocodes || data.geocodes.length === 0) {
+    data = await amapFetch('/geocode/geo', { address: '广东' + placeName });
+  }
+  if (!data.geocodes || data.geocodes.length === 0) return null;
+  const g = data.geocodes[0];
+  const [lng, lat] = g.location.split(',').map(Number);
+  return { name: g.formatted_address || g.name, lng, lat, adcode: g.adcode, level: g.level };
+}
+
+async function searchNearbyPOIs(lng, lat, destinationName, keywords, radius = 5000) {
+  const allPois = [];
+  const queries = [];
+
+  // 策略 A：用目的地名称做文本搜索（挖出景区内部子地点）
+  //  比如搜"南岗瑶寨"能命中"南岗瑶寨-龙眉坡""南岗千年瑶寨-歌堂坪"等
+  const shortName = destinationName.replace(/广东|广东省|清远|连南|连州|韶关|梅州/g, '').trim().slice(0, 6);
+  queries.push(
+    amapFetch('/place/text', {
+      keywords: shortName,
+      city: '清远',
+      offset: 20,
+      page: 1,
+      extensions: 'all'
+    }).catch(() => null)
+  );
+
+  // 策略 B：周边搜索（挖出外围餐厅、停车场、商店）
+  if (keywords && keywords.length > 0) {
+    keywords.forEach(k => {
+      queries.push(
+        amapFetch('/place/around', {
+          location: `${lng},${lat}`,
+          keywords: k,
+          radius,
+          offset: 15,
+          page: 1,
+          extensions: 'all'
+        }).catch(() => null)
+      );
+    });
+  }
+
+  // 策略 C：无关键词时的兜底周边搜索
+  queries.push(
+    amapFetch('/place/around', {
+      location: `${lng},${lat}`,
+      radius,
+      offset: 20,
+      page: 1,
+      extensions: 'all'
+    }).catch(() => null)
+  );
+
+  const results = await Promise.all(queries);
+  const seen = new Set();
+  for (const data of results) {
+    if (!data || !data.pois) continue;
+    for (const p of data.pois) {
+      if (seen.has(p.id)) continue;
+      seen.add(p.id);
+      allPois.push({
+        id: p.id,
+        name: p.name,
+        type: p.type,
+        typecode: p.typecode,
+        address: p.address,
+        location: p.location,
+        distance: parseInt(p.distance) || 0,
+        tel: p.tel || null,
+        rating: p.biz_ext?.rating || null,
+        cost: p.biz_ext?.cost || null
+      });
+    }
+  }
+  allPois.sort((a, b) => a.distance - b.distance);
+  return allPois;
+}
+
+function classifyPOIs(pois) {
+  const categories = {
+    scenic: [],   // 景点
+    food: [],     // 餐饮
+    culture: [],  // 文化/历史
+    shop: [],     // 购物
+    service: [],  // 服务设施（不用于行程节点，只供参考）
+    other: [],
+    skip: []      // 跳过：公交站/停车场/政府机构/公厕等
+  };
+  for (const p of pois) {
+    const t = parseInt(p.typecode) || 0;
+    // 排除不可玩的设施
+    const name = p.name || '';
+    const type = p.type || '';
+    const isSkip =
+      t >= 150000 && t < 160000 ||  // 公交/交通设施
+      t >= 130000 && t < 140000 ||  // 政府/社会团体
+      t >= 80000 && t < 81000 && !name.includes('观景') && !name.includes('步道') && !name.includes('公园') ||  // 公共设施（排除观景台/步道）
+      type.includes('公交') || type.includes('收费站') || type.includes('加油站') ||
+      name.includes('停车场') && !name.includes('观景') ||
+      name.includes('公共厕所') || name.includes('党群') || name.includes('委员会') ||
+      name.includes('服务站') || name.includes('监督') || name.includes('售票处');
+    if (isSkip) { categories.skip.push(p); continue; }
+
+    if (t >= 110000 && t < 120000) categories.scenic.push(p);
+    else if (t >= 50000 && t < 60000) categories.food.push(p);
+    else if (t >= 60000 && t < 70000) categories.shop.push(p);
+    else if (t >= 80000 && t < 81000) categories.service.push(p);
+    else if (t >= 100000 && t < 110000) categories.culture.push(p);
+    else if (t >= 140000 && t < 150000) categories.culture.push(p);
+    else categories.other.push(p);
+  }
+  return categories;
+}
+
+function buildPOIEnrichedPrompt(geocodeResult, categorizedPois, destinationName) {
+  const loc = geocodeResult;
+  let poiText = '\n【以下是高德地图实时返回的真实 POI 数据——每条都经过高德验证，坐标真实存在】\n\n';
+  poiText += `📍 目的地：${destinationName}\n`;
+  poiText += `   地理编码坐标：${loc.lng}, ${loc.lat}\n`;
+  poiText += `   完整地址：${loc.name}\n\n`;
+
+  // 区分：景区内部子地点（文本搜索命中） vs 周边外围 POI（半径搜索）
+  const isScenicSubPOI = (p) => {
+    // 文本搜索命中的通常 name 包含目的地关键词，或 type 是"风景名胜""旅游景点"
+    return p.type.includes('风景') || p.type.includes('旅游') ||
+           p.type.includes('名胜') || p.type.includes('景点') ||
+           p.typecode >= 110000 && p.typecode < 120000;
+  };
+
+  const c = categorizedPois;
+  const scenicSubs = [...c.scenic, ...c.culture].filter(isScenicSubPOI);
+  const externalFood = c.food;
+  const externalService = c.service;
+  const others = [...c.scenic, ...c.culture].filter(p => !isScenicSubPOI(p));
+
+  if (scenicSubs.length > 0) {
+    poiText += `🏔️ 景区内部地点（${scenicSubs.length}个）—— 行程核心节点，优先使用：\n`;
+    scenicSubs.slice(0, 12).forEach((p, i) => {
+      const [plng, plat] = p.location.split(',').map(Number);
+      poiText += `  ${i + 1}. ${p.name}\n`;
+      poiText += `     类型：${p.type} | 坐标：${plat}, ${plng}${p.address ? ' | 地址：' + p.address : ''}\n`;
+    });
+    poiText += '\n';
+  }
+
+  if (externalFood.length > 0) {
+    poiText += `🍜 周边餐饮（${externalFood.length}个）：\n`;
+    externalFood.slice(0, 8).forEach(p => {
+      const [plng, plat] = p.location.split(',').map(Number);
+      poiText += `  - ${p.name} | ${p.type} | 坐标：${plat}, ${plng}${p.rating ? ' | ★' + p.rating : ''}\n`;
+    });
+    poiText += '\n';
+  }
+
+  if (others.length > 0) {
+    poiText += `🏛️ 其他周边地点（${others.length}个）：\n`;
+    others.slice(0, 5).forEach(p => {
+      const [plng, plat] = p.location.split(',').map(Number);
+      poiText += `  - ${p.name} | ${p.type} | 坐标：${plat}, ${plng}\n`;
+    });
+    poiText += '\n';
+  }
+
+  if (externalService.length > 0) {
+    poiText += `🅿️ 服务设施：${externalService.map(p => p.name + '(' + p.type + ')').join('、')}\n\n`;
+  }
+
+  poiText += '══════════════════════════════════════\n';
+  poiText += '  【硬性约束 —— 每条违反都会导致行程作废】\n';
+  poiText += '══════════════════════════════════════\n\n';
+  poiText += '1. ⛔ 只使用以上列出的真实 POI。上面没有的地名，一个都不许编。\n';
+  poiText += '2. ⛔ place 字段 = POI 名称原样照抄（可加"村口""寨内"前缀，不准改核心名）\n';
+  poiText += '3. ⛔ 经纬度 = 上面标注的坐标原样照抄，不准自己编。lat/lng 小数位数和上面一致。\n';
+  poiText += '4. ⛔ 如果餐饮 POI 只有 2 个，你就只能写 2 顿饭。不许杜撰"农家小院""土菜馆"。\n';
+  poiText += '5. ⛔ 景区内部地点优先用于上午/下午游览节点；餐饮 POI 仅用于午餐节点。\n';
+  poiText += '6. 节点总数：半天 4-5 / 一天 6-7 / 两天一夜 8-10。不够就用"自由探索+上一个 POI 坐标"。\n';
+  poiText += '7. tip 里可以提醒真实路况（石板路、台阶数），但不要编造不存在的设施。\n';
+  return poiText;
+}
+
+// 无 AI 时：直接用高德 POI 数据构建行程
+function buildItineraryFromPOIs(geocodeResult, categorizedPois) {
+  const steps = [];
+  const c = categorizedPois;
+  let time = { h: 9, m: 0 };
+  const nextTime = (addMin = 75) => {
+    time.m += addMin;
+    if (time.m >= 60) { time.h += Math.floor(time.m / 60); time.m = time.m % 60; }
+    const hh = String(time.h).padStart(2, '0');
+    const mm = String(time.m).padStart(2, '0');
+    return `${hh}:${mm}`;
+  };
+
+  // 起点：优先用住宿，否则用目的地本身
+  if (state.accommodation && state.accommodation.name) {
+    const a = state.accommodation;
+    const [lng0, lat0] = [geocodeResult.lng, geocodeResult.lat];
+    const accLat = a.lat || lat0;
+    const accLng = a.lng || lng0;
+    steps.push({
+      time: '08:30',
+      place: a.name,
+      lat: accLat, lng: accLng,
+      activity: `在${a.name}醒来，窗外是乡村的晨光。阿婆已经在厨房里忙活，蒸笼冒着白汽——新的一天从一碗热粥和几个刚出锅的糍粑开始。`,
+      tip: a.source === 'custom' ? '出发前确认好今天的路线，和住处老板打听一下最近的捷径。' : '吃完早餐收拾好行装，退房时可以让老板帮忙保管行李到下午。',
+      isAccommodation: true
+    });
+    time = { h: 9, m: 0 }; // 出发时间
+  } else {
+    steps.push({
+      time: nextTime(0),
+      place: geocodeResult.name,
+      lat: geocodeResult.lat, lng: geocodeResult.lng,
+      activity: `抵达${geocodeResult.name}，这里是这次乡野之旅的起点。环顾四周，感受第一眼的乡村印象——空气里的味道、远处的声音、脚下的路。`,
+      tip: '到达后可以先找一处视野开阔的地方，拍一张全景作为旅程的开场。'
+    });
+  }
+
+  // 上午：1-2 个景点
+  const morningPois = [...c.scenic.slice(0, 2), ...c.culture.slice(0, 1)];
+  for (const p of morningPois.slice(0, 2)) {
+    const [plng, plat] = p.location.split(',').map(Number);
+    steps.push({
+      time: nextTime(80),
+      place: p.name,
+      lat: plat, lng: plng,
+      activity: `走进${p.name}，把脚步放慢，用心去看那些容易被忽略的细节——墙壁上的纹理、老树根部的青苔、当地人脸上不经意的表情。${p.type.includes('展') || p.type.includes('文化') ? '这里藏着许多故事，值得细细品味。' : '每一个角落都是风景。'}`,
+      tip: `距起点约${p.distance}米，步行可达；留意周围的指路牌和小路。`
+    });
+  }
+
+  // 午餐
+  const lunchSpot = c.food[0] || null;
+  if (lunchSpot) {
+    const [plng, plat] = lunchSpot.location.split(',').map(Number);
+    steps.push({
+      time: nextTime(90),
+      place: lunchSpot.name,
+      lat: plat, lng: plng,
+      activity: `中午在${lunchSpot.name}歇脚吃饭。坐下来，点几道本地人常吃的菜。食物是最好的向导——一餐饭能告诉你的，比一本攻略还多。${lunchSpot.rating ? '这里口碑不错，值得期待。' : ''}`,
+      tip: `建议避开 12:00-12:30 高峰时段；${lunchSpot.tel ? '订座电话：' + lunchSpot.tel : '乡村小店多半不用订座，随到随点。'}`
+    });
+  }
+
+  // 下午：剩余景点 + 文化场所
+  const afternoonPois = [...c.scenic.slice(2, 4), ...c.culture.slice(1, 3), ...c.other.slice(0, 2)];
+  for (const p of afternoonPois.slice(0, 2)) {
+    const [plng, plat] = p.location.split(',').map(Number);
+    steps.push({
+      time: nextTime(70),
+      place: p.name,
+      lat: plat, lng: plng,
+      activity: p.type.includes('餐') || p.type.includes('美食')
+        ? `路过${p.name}，香气扑鼻。坐下来补充能量，继续下午的探索。`
+        : `来到${p.name}，午后的光线正好。找一个舒服的角落，让时间慢下来——乡村旅行的精髓，就是不赶时间。`,
+      tip: p.distance < 500 ? '步行只需几分钟，沿途的巷道本身就是风景。' : `距离上个点约${p.distance}米。`
+    });
+  }
+
+  // 返程/终点：回到住宿（首尾闭环）
+  if (steps.length > 1) {
+    const accNode = steps[0]; // 第一个节点就是住宿
+    // 最晚返回时间 19:00
+    const rawMin = time.h * 60 + time.m;
+    const returnMin = Math.min(rawMin + 30, 19 * 60);
+    const hh = String(Math.floor(returnMin / 60)).padStart(2, '0');
+    const mm = String(returnMin % 60).padStart(2, '0');
+
+    steps.push({
+      time: hh + ':' + mm,
+      place: accNode.place,
+      lat: accNode.lat, lng: accNode.lng,
+      activity: '一天的乡野之旅画上句号。踩着夕阳的余晖回到住处，鞋底还沾着山间的泥土。洗个热水澡，翻看今天拍的照片——乡村的一天，够回味很久。',
+      tip: '回到住处可让老板帮忙热一碗汤或煮碗面；山里夜间安静，早睡早起明天更有精神。',
+      isAccommodation: true
+    });
+  }
+
+  return {
+    title: `遇见${geocodeResult.name.split(' ').pop().slice(0, 6)}`,
+    summary: `基于高德地图真实数据规划的${state.destination}一日慢游`,
+    steps,
+    isAIGenerated: false,
+    source: 'amap'
+  };
+}
+
+// 将 AI 返回的步骤强制对齐到真实 POI 坐标
+function snapStepsToRealPOIs(steps, allPois, geocodeResult) {
+  if (!allPois || allPois.length === 0) return steps;
+
+  return steps.map(step => {
+    const stepName = step.place || '';
+
+    // 1. 精确匹配：POI 名称完全包含在 step.place 中
+    let match = allPois.find(p => stepName.includes(p.name) || p.name.includes(stepName));
+    if (match) {
+      const [lng, lat] = match.location.split(',').map(Number);
+      console.log(`  ✅ 坐标校准: "${stepName}" → ${match.name} (${lat}, ${lng})`);
+      return { ...step, lat, lng, place: step.place };
+    }
+
+    // 2. 模糊匹配：计算名称相似度（简单的字符重叠率）
+    let bestScore = 0;
+    let bestPoi = null;
+    for (const p of allPois) {
+      const overlap = [...new Set(stepName)].filter(c => p.name.includes(c)).length;
+      const score = overlap / Math.max(stepName.length, p.name.length);
+      if (score > bestScore && score > 0.4) {
+        bestScore = score;
+        bestPoi = p;
+      }
+    }
+    if (bestPoi) {
+      const [lng, lat] = bestPoi.location.split(',').map(Number);
+      console.log(`  ⚠️ 模糊匹配: "${stepName}" ≈ "${bestPoi.name}" (${lat}, ${lng})`);
+      return { ...step, lat, lng };
+    }
+
+    // 3. 无法匹配：用目的地中心坐标（至少还在目标区域内）
+    if (geocodeResult) {
+      console.warn(`  ❌ 无匹配: "${stepName}" → 使用目的地中心坐标`);
+      return { ...step, lat: geocodeResult.lat, lng: geocodeResult.lng };
+    }
+
+    console.warn(`  ❌ 无匹配且无地理编码: "${stepName}"（保留 AI 原始坐标）`);
+    return step;
+  });
+}
+
+// ==================== 路线空间优化 ====================
+// 将 AI 输出的游览节点按空间顺序重排，但首尾住宿节点不动
+function spatialOptimize(steps) {
+  if (steps.length <= 3) return steps;
+
+  const first = steps[0];
+  const last = steps[steps.length - 1];
+  const isClosedLoop = first.isAccommodation && last.isAccommodation &&
+    first.place === last.place;
+
+  // 只重排中间节点（排除首尾住宿）
+  const middle = isClosedLoop ? steps.slice(1, -1) : steps.slice(1);
+  if (middle.length <= 1) return steps;
+
+  // 1. 计算中间节点的地理中心
+  const sum = middle.reduce((a, s) => ({ lat: a.lat + s.lat, lng: a.lng + s.lng }), { lat: 0, lng: 0 });
+  const center = { lat: sum.lat / middle.length, lng: sum.lng / middle.length };
+
+  // 2. 行进方向：起点 → 中心
+  const dirLat = center.lat - first.lat;
+  const dirLng = center.lng - first.lng;
+
+  // 3. 贪心最近邻排列中间节点
+  const ordered = [middle[0]];
+  const pool = middle.slice(1);
+  while (pool.length > 0) {
+    const prev = ordered[ordered.length - 1];
+    let bestIdx = 0, bestDist = Infinity;
+    for (let i = 0; i < pool.length; i++) {
+      const d = geoDist(prev, pool[i]);
+      if (d < bestDist) { bestDist = d; bestIdx = i; }
+    }
+    ordered.push(pool[bestIdx]);
+    pool.splice(bestIdx, 1);
+  }
+
+  // 4. 方向修正
+  for (let i = 1; i < ordered.length - 1; i++) {
+    const a = ordered[i - 1], b = ordered[i], c = ordered[i + 1];
+    const dot = (b.lat - a.lat) * dirLat + (b.lng - a.lng) * dirLng;
+    if (dot < 0 && i + 1 < ordered.length) {
+      [ordered[i], ordered[i + 1]] = [ordered[i + 1], ordered[i]];
+      i++;
+    }
+  }
+
+  // 5. 重新分配时间（09:00 开始，每个节点约 75 分钟，最晚户外 18:00）
+  let cur = 9 * 60;
+  for (let i = 0; i < ordered.length; i++) {
+    if (i > 0) cur += 75;
+    const hh = String(Math.floor(cur / 60)).padStart(2, '0');
+    const mm = String(cur % 60).padStart(2, '0');
+    ordered[i] = { ...ordered[i], time: hh + ':' + mm };
+  }
+
+  // 6. 拼接：首（住宿不变）+ 中间重排 + 尾（住宿不变）
+  const result = isClosedLoop
+    ? [first, ...ordered, last]
+    : [first, ...ordered];
+
+  console.log('🗺️ 空间优化:', result.map(s => s.place.slice(0, 8)).join(' → '));
+  return result;
+}
+
+function geoDist(a, b) {
+  const R = 111320;
+  const dx = (b.lng - a.lng) * Math.cos((a.lat + b.lat) / 2 * Math.PI / 180) * R;
+  const dy = (b.lat - a.lat) * R;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function parseTime(t) {
+  const [h, m] = (t || '09:00').split(':').map(Number);
+  return h * 60 + (m || 0);
+}
+
+async function generateTrip(useFallback = false) {
+  hideError();
+  resultSection.classList.remove('show');
+
+  if (!state.destination.trim()) {
+    alert('请先输入或选择一个目的地～');
+    destInput.focus();
+    return;
+  }
+
+  if (state.mapInstance) { state.mapInstance.remove(); state.mapInstance = null; }
+
+  // 1. 检查缓存
+  if (!useFallback) {
+    const cached = getCachedTrip();
+    if (cached) { console.log('📦 命中缓存'); displayTrip(cached); return; }
+  }
+
+  const hasAI = hasApiConfig() && !useFallback;
+  console.log('🔍 generateTrip:', {
+    destination: state.destination,
+    hasAI,
+    hasApiSettings: hasApiConfig(),
+    useFallback,
+    cached: !useFallback ? !!getCachedTrip() : 'skipped',
+    settings: getSettings()
+  });
+
+  // 2. AI 自主搜索 + 规划（Function Calling）
+  if (hasAI) {
+    showLoading('AI 即将开始搜索…');
+    loadingIcon.textContent = '🤖';
+    loadingPhase.textContent = 'AI 正在搜索目的地…';
+    loadingSub.textContent = '调用高德地图获取真实数据';
+
+    try {
+      const userPrompt = buildUserPrompt(state.routeVariation);
+      const content = await callAIWithTools(userPrompt);
+      const tripData = parseAIResponse(content);
+
+      // 空间优化：用贪心最近邻重排，确保行进路线在空间上合理
+      tripData.steps = spatialOptimize(tripData.steps);
+
+      let steps = tripData.steps;
+      tripData.steps = steps;
+      tripData.isAIGenerated = true;
+      tripData.source = 'ai+amap';
+      setCachedTrip(tripData);
+      displayTrip(tripData);
+      return;
+    } catch (err) {
+      console.error('❌ AI 工具调用失败:', err.message, err.stack);
+      hideLoading();
+      // 显示错误信息给用户
+      showError('AI 调用失败', err.message + '。正在尝试浏览器直搜…', '🤖');
+    }
+  }
+
+  // 3. 浏览器直搜高德 + 构建行程（无 AI 或 AI 失败时）
+  showLoading('正在查找目的地…');
+  loadingIcon.textContent = '📍';
+  loadingPhase.textContent = '正在搜索高德地图…';
+  loadingSub.textContent = '查找景区子地点和周边好去处';
+
+  let geocodeResult = null, categorizedPois = null;
+
+  try {
+    geocodeResult = await geocodeDestination(state.destination);
+    if (geocodeResult) {
+      const interestKwMap = { history: '古迹|博物馆|寺庙|祠堂|古村', nature: '景点|公园|山|湖|森林|梯田', food: '餐厅|美食|小吃|农家乐|特产', family: '景点|乐园|体验|手工|采摘' };
+      const keywords = state.interests.map(t => interestKwMap[t] || '景点').join('|');
+      const pois = await searchNearbyPOIs(geocodeResult.lng, geocodeResult.lat, state.destination, [keywords]);
+      categorizedPois = classifyPOIs(pois);
+      console.log(`📍 ${geocodeResult.lng},${geocodeResult.lat} | 🔍 ${pois.length} POI`);
+    }
+  } catch (err) { console.warn('⚠️ 高德失败:', err.message); }
+
+  if (geocodeResult && categorizedPois &&
+      (categorizedPois.scenic.length + categorizedPois.food.length + categorizedPois.culture.length) >= 1) {
+    console.log('🗺️ POI 直构行程');
+    const tripData = buildItineraryFromPOIs(geocodeResult, categorizedPois);
+    tripData.steps = spatialOptimize(tripData.steps);
+    tripData.source = 'amap';
+    setCachedTrip(tripData);
+    displayTrip(tripData);
+    return;
+  }
+
+  // 4. 最终兜底
+  hideLoading();
+  const routes = getFallbackRoutes();
+  if (routes.length === 0) { showError('暂无数据', `未找到"${state.destination}"的信息。`, '📭'); return; }
+  const route = routes[state.routeVariation % routes.length];
+  const steps = [...route.steps];
+  displayTrip({
+    title: route.name, summary: route.summary,
+    steps: steps,
+    isAIGenerated: false, source: 'fallback'
+  });
+}
+
+// ==================== Fallback 逻辑 ====================
+function getFallbackRoutes() {
+  const dest = state.destination;
+  if (FALLBACK_ROUTES[dest]) return FALLBACK_ROUTES[dest];
+
+  for (const key of Object.keys(FALLBACK_ROUTES)) {
+    if (dest.includes(key) || key.includes(dest)) return FALLBACK_ROUTES[key];
+  }
+  return [];
+}
+
+// ==================== 事件处理 ====================
+
+// 目的地快捷选择
+destPresets.addEventListener('click', (e) => {
+  if (e.target.classList.contains('dest-preset')) {
+    destPresets.querySelectorAll('.dest-preset').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    destInput.value = e.target.dataset.dest;
+    state.destination = e.target.dataset.dest;
+    state.routeVariation = 0;
+  }
+});
+
+destInput.addEventListener('input', () => {
+  state.destination = destInput.value.trim();
+  state.routeVariation = 0;
+  const matched = [...destPresets.querySelectorAll('.dest-preset')]
+    .find(b => b.dataset.dest === destInput.value.trim());
+  destPresets.querySelectorAll('.dest-preset').forEach(b => b.classList.remove('active'));
+  if (matched) matched.classList.add('active');
+});
+
+peopleCount.addEventListener('input', () => {
+  state.peopleCount = parseInt(peopleCount.value) || 1;
+});
+
+[hasElderlyBtn, hasChildrenBtn].forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.classList.toggle('active');
+    state.hasElderly = hasElderlyBtn.classList.contains('active');
+    state.hasChildren = hasChildrenBtn.classList.contains('active');
+  });
+});
+
+interestTags.addEventListener('click', (e) => {
+  if (e.target.classList.contains('tag-btn')) {
+    e.target.classList.toggle('active');
+    state.interests = [...interestTags.querySelectorAll('.tag-btn.active')]
+      .map(b => b.dataset.tag);
+  }
+});
+
+durationGroup.addEventListener('click', (e) => {
+  if (e.target.classList.contains('duration-btn')) {
+    durationGroup.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    state.duration = e.target.dataset.dur;
+    state.customDays = { full: 1, two: 2, three: 3 }[e.target.dataset.dur] || 1;
+    $('#customDays').value = '';
+  }
+});
+
+$('#customDays').addEventListener('input', () => {
+  const v = parseInt($('#customDays').value);
+  if (v >= 1 && v <= 7) {
+    state.customDays = v;
+    state.duration = 'custom';
+    durationGroup.querySelectorAll('.duration-btn').forEach(b => b.classList.remove('active'));
+  }
+});
+
+// ==================== 住宿自动搜索 ====================
+accommodationCustomBtn.addEventListener('click', () => {
+  const isCustom = accommodationCustom.style.display !== 'none';
+  if (isCustom) {
+    accommodationCustom.style.display = 'none';
+    accommodationSelect.style.display = '';
+    accommodationCustomBtn.textContent = '✏️ 手动输入';
+    state.accommodation = parseAccommodationFromSelect();
+  } else {
+    accommodationCustom.style.display = '';
+    accommodationSelect.style.display = 'none';
+    accommodationCustomBtn.textContent = '📋 选列表';
+    accommodationCustom.focus();
+  }
+});
+
+accommodationSelect.addEventListener('change', () => {
+  state.accommodation = parseAccommodationFromSelect();
+});
+
+accommodationCustom.addEventListener('input', () => {
+  const name = accommodationCustom.value.trim();
+  if (name) {
+    state.accommodation = { name, lat: null, lng: null, source: 'custom' };
+  }
+});
+
+function parseAccommodationFromSelect() {
+  const val = accommodationSelect.value;
+  if (!val) return null;
+  try { return JSON.parse(val); } catch { return { name: val, lat: null, lng: null, source: 'poi' }; }
+}
+
+async function searchAccommodations(destName) {
+  accommodationSelect.innerHTML = '<option value="">-- 搜索中… --</option>';
+  accommodationStatus.textContent = '';
+  state.accommodation = null;
+
+  try {
+    // 先地理编码获取坐标
+    const geo = await geocodeDestination(destName);
+    if (!geo) {
+      accommodationSelect.innerHTML = '<option value="">-- 未找到目的地，请先确认 --</option>';
+      return;
+    }
+    // 搜周边住宿
+    const data = await amapFetch('/place/around', {
+      location: `${geo.lng},${geo.lat}`,
+      keywords: '民宿|酒店|客栈|农家乐',
+      radius: 5000,
+      offset: 10,
+      page: 1,
+      extensions: 'all'
+    });
+    const pois = (data.pois || []).slice(0, 8);
+
+    if (pois.length === 0) {
+      accommodationSelect.innerHTML = '<option value="">-- 周边未找到住宿，请手动输入 --</option>';
+      accommodationStatus.textContent = '周边 5km 内无住宿 POI，建议手动输入住处名称';
+      return;
+    }
+
+    accommodationSelect.innerHTML = '<option value="">-- 请选择住宿（或跳过，用第一个） --</option>';
+    pois.forEach((p, i) => {
+      const [plng, plat] = p.location.split(',').map(Number);
+      const opt = { name: p.name, lat: plat, lng: plng, source: 'poi', address: p.address, distance: p.distance, rating: p.biz_ext?.rating };
+      accommodationSelect.innerHTML += `<option value="${encodeURIComponent(JSON.stringify(opt))}">${p.name} | ${p.type} | ${p.distance}米${p.biz_ext?.rating ? ' | ★' + p.biz_ext.rating : ''}</option>`;
+    });
+
+    // 默认选第一个
+    const first = pois[0];
+    const [flng, flat] = first.location.split(',').map(Number);
+    state.accommodation = { name: first.name, lat: flat, lng: flng, source: 'poi', address: first.address, distance: first.distance };
+    accommodationSelect.selectedIndex = 1; // 跳过"--请选择--"
+    accommodationStatus.textContent = `已自动选择「${first.name}」，距目的地 ${first.distance} 米。可切换或手动输入。`;
+  } catch (err) {
+    console.warn('住宿搜索失败:', err.message);
+    accommodationSelect.innerHTML = '<option value="">-- 搜索失败，请手动输入 --</option>';
+  }
+}
+
+// 目的地变更时自动搜索住宿
+const origDestInputHandler = destInput.oninput;
+destInput.addEventListener('input', () => {
+  const dest = destInput.value.trim();
+  if (dest && dest !== state._lastAccommodationSearch) {
+    state._lastAccommodationSearch = dest;
+    searchAccommodations(dest);
+  }
+});
+
+// 预设目的地点击也触发搜索
+const origPresetHandler = destPresets.onclick;
+destPresets.addEventListener('click', (e) => {
+  if (e.target.classList.contains('dest-preset')) {
+    const dest = e.target.dataset.dest;
+    if (dest !== state._lastAccommodationSearch) {
+      state._lastAccommodationSearch = dest;
+      setTimeout(() => searchAccommodations(dest), 100);
+    }
+  }
+});
+
+// 生成按钮
+generateBtn.addEventListener('click', () => {
+  state.routeVariation = 0;
+  generateTrip();
+});
+
+// 换个路线
+switchBtn.addEventListener('click', () => {
+  state.routeVariation++;
+  // 清除当前参数的缓存，强制重新生成
+  try { localStorage.removeItem(getCacheKey()); } catch {}
+  generateTrip();
+});
+
+// 返回修改
+backBtn.addEventListener('click', () => {
+  hideLoading();
+  hideError();
+  resultSection.classList.remove('show');
+  formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (state.mapInstance) {
+    state.mapInstance.remove();
+    state.mapInstance = null;
+  }
+});
+
+// 错误面板：重试
+$('#retryBtn').addEventListener('click', () => {
+  generateTrip();
+});
+
+// 错误面板：使用示例
+$('#fallbackBtn').addEventListener('click', () => {
+  generateTrip(true);
+});
+
+// 键盘快捷键
+destInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    state.routeVariation = 0;
+    generateTrip();
+  }
+});
+
+// ==================== 初始化 ====================
+loadSettingsToForm();
+updateSettingsIndicator();
+// 自动搜索默认目的地的住宿
+searchAccommodations(state.destination);
+// ==================== 村落详情数据 ====================
+const VILLAGE_DETAILS = {
+  '清远千年瑶寨': {
+    image: './images/yaozhai.jpg',
+    gradient: 'linear-gradient(135deg,#5a7a6a,#3d5a45,#6a9a7a)',
+    emoji: '🏔️',
+    tagline: '千年瑶寨，云雾里的秘境',
+    desc: '南岗千年瑶寨坐落在海拔800米的山腰上，始建于宋代，至今已有上千年历史。这里是全国规模最大、最古老、最具特色的瑶族村寨。沿着被磨得发亮的石板路往上走，几百座吊脚楼依山就势、层层叠叠，青瓦屋顶像鱼鳞一样铺满了整面山坡。清晨云雾漫到半山腰时，整座寨子仿佛悬浮在云海之上。寨中至今保留着完整的长鼓舞、瑶绣、盘王节等非遗传承，阿婆们坐在木廊上绣花的日常，就是最生动的风景。走累了就在石板台阶上坐下，看远山如黛、炊烟袅袅——你会明白什么叫"望得见山、看得见水、记得住乡愁"。',
+    spots: [
+      { name: '古寨门', desc: '瑶寨入口，拦门酒迎宾仪式', tag: '地标', emoji: '⛩️', bg: 'linear-gradient(135deg,#8b6f4e,#6b5030)' },
+      { name: '歌舞广场', desc: '长鼓舞和山歌表演的舞台', tag: '表演', emoji: '💃', bg: 'linear-gradient(135deg,#c47a4a,#a06030)' },
+      { name: '古井', desc: '三百年的老井，井水依旧甘甜', tag: '古迹', emoji: '🪣', bg: 'linear-gradient(135deg,#5a7a6a,#3d5a45)' },
+      { name: '梯田观景台', desc: '俯瞰整座瑶寨和千层梯田', tag: '观景', emoji: '🌾', bg: 'linear-gradient(135deg,#8b9a5e,#6b7a3e)' },
+      { name: '瑶绣工坊', desc: '跟绣娘学几针瑶族刺绣', tag: '体验', emoji: '🧵', bg: 'linear-gradient(135deg,#a0706a,#80504a)' }
+    ]
+  },
+  '清远英西峰林': {
+    image: './images/fenglin.jpg',
+    gradient: 'linear-gradient(135deg,#6b8f5e,#4a6d3c,#8db87a)',
+    emoji: '⛰️',
+    tagline: '广东小桂林，峰林间的田园诗',
+    desc: '英西峰林走廊位于清远英德市，是广东规模最大的喀斯特地貌区。上千座石灰岩峰林从平原上拔地而起，形态各异、错落有致，被《中国国家地理》评为"广东最美的峰林"。骑行在峰林间的乡村绿道上，两边的稻田一直铺到山脚，白鹭从田埂上飞起来，慢悠悠地扇着翅膀。这里有"华南第一天坑"洞天仙境，有保存完好的明清古村落，有层层叠叠的茶园和竹林。傍晚时分，夕阳把峰林染成金色，炊烟从农家升起——你会以为自己闯进了一幅山水画。',
+    spots: [
+      { name: '峰林走廊', desc: '上千座峰林错落排列的景观大道', tag: '地标', emoji: '🏞️', bg: 'linear-gradient(135deg,#6b8f5e,#4a6d3c)' },
+      { name: '彭家祠', desc: '"小布达拉宫"，依山而建的明清古堡', tag: '古迹', emoji: '🏯', bg: 'linear-gradient(135deg,#8b7355,#6b5538)' },
+      { name: '竹筏漂流', desc: '乘竹筏穿行峰林之间，换个角度看山', tag: '体验', emoji: '🛶', bg: 'linear-gradient(135deg,#5a8aaa,#3a6a8a)' },
+      { name: '田园骑行道', desc: '单车穿越稻田和峰林的乡村绿道', tag: '户外', emoji: '🚲', bg: 'linear-gradient(135deg,#8b9a5e,#6b7a3e)' }
+    ]
+  },
+  '梅州桥溪古村': {
+    image: './images/qiaoxi.jpg',
+    gradient: 'linear-gradient(135deg,#8b7355,#6b5538,#a89070)',
+    emoji: '🏘️',
+    tagline: '客家围龙深处的山水画廊',
+    desc: '桥溪古村隐藏在梅州雁南飞茶田的深处，是一座有着四百多年历史的客家古村落。村中保存着十几座完整的围龙屋——这是客家人独有的建筑形式，半圆形的围屋像一条龙盘卧在山脚。青石板路蜿蜒穿过古村，两边是斑驳的老墙和在风中摇晃的红灯笼。村后是大片大片的茶田，层层叠叠地铺到山顶，采茶季节空气中弥漫着淡淡的茶香。村口的老榕树下，老人摇着蒲扇下棋，时间在这里走得特别慢。如果你运气好，还能听到老人家用客家话唱山歌——那嗓音像从很远的年代传过来。',
+    spots: [
+      { name: '围龙屋群', desc: '十几座客家围龙屋，建筑史的活化石', tag: '古迹', emoji: '🏠', bg: 'linear-gradient(135deg,#8b7355,#6b5538)' },
+      { name: '古驿道', desc: '百年石板路，曾经是粤东茶商南下通道', tag: '历史', emoji: '🛤️', bg: 'linear-gradient(135deg,#6b6b5e,#4b4b3e)' },
+      { name: '采茶体验园', desc: '亲手采摘客家单丛茶，品茶艺师冲泡', tag: '体验', emoji: '🍃', bg: 'linear-gradient(135deg,#6b8f5e,#4a6d3c)' },
+      { name: '溪畔竹林', desc: '沿溪而上的竹林小径，水声鸟鸣相伴', tag: '自然', emoji: '🎋', bg: 'linear-gradient(135deg,#5a8a6a,#3a6a4a)' }
+    ]
+  },
+  '韶关丹霞夏富村': {
+    image: './images/xiafu.jpg',
+    gradient: 'linear-gradient(135deg,#c47a4a,#a05a2a,#d4946a)',
+    emoji: '🏜️',
+    tagline: '丹霞山脚的隐世田园',
+    desc: '夏富村坐落在世界自然遗产丹霞山的脚下，锦江从村前缓缓流过。红色砂岩的丹霞地貌与绿色田园交织在一起，形成一幅奇特的画卷。村里的古建筑大多建于明清时期，青砖黛瓦、雕花门窗，保存着完整的岭南乡村风貌。锦江步道沿河而建，碧水红岩、翠竹掩映，丹霞地貌的壮美尽收眼底。傍晚时分村民赶着牛从田埂上回来，夕阳把丹霞山染得通红——这是丹霞山最温柔的一面，没有游客的喧嚣，只有田园的宁静。春天油菜花金黄一片，秋天稻浪翻滚，每个季节都有不同的颜色。',
+    spots: [
+      { name: '丹霞观景台', desc: '近距离观赏丹霞红岩的壮美纹理', tag: '观景', emoji: '🔭', bg: 'linear-gradient(135deg,#c47a4a,#a05a2a)' },
+      { name: '古民居', desc: '明清青砖老屋，雕花门窗保存完好', tag: '古迹', emoji: '🏚️', bg: 'linear-gradient(135deg,#8b7355,#6b5538)' },
+      { name: '锦江漫步道', desc: '沿江步道，碧水红岩翠竹相伴', tag: '户外', emoji: '🚶', bg: 'linear-gradient(135deg,#5a8aaa,#3a6a8a)' },
+      { name: '农家菜体验', desc: '丹霞山坑螺焖鸡和锦江河鱼', tag: '美食', emoji: '🍲', bg: 'linear-gradient(135deg,#a07050,#805030)' }
+    ]
+  }
+};
+
+// ==================== 页面导航 ====================
+function showPage(id) {
+  console.log('📄 showPage:', id);
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  const page = document.getElementById(id);
+  console.log('  → page element:', page ? 'found' : 'MISSING');
+  if (page) { page.classList.add('active'); page.scrollTop = 0; }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// 村落卡片点击处理函数（供 onclick 和事件委托共用）
+function handleVillageClick(dest) {
+  console.log('🏘️ handleVillageClick:', dest);
+  const info = VILLAGE_DETAILS[dest];
+  if (!info) { console.log('  → 无详情数据'); return; }
+
+  const hero = document.getElementById('detailHero');
+  hero.style.backgroundImage = info.image ? `url('${info.image}')` : info.gradient;
+  hero.style.backgroundSize = 'cover';
+  hero.style.backgroundPosition = 'center 30%';
+  hero.querySelector('.hero-text').innerHTML =
+    `<h2>${dest}</h2><p>${info.tagline}</p>`;
+  document.getElementById('detailDesc').textContent = info.desc;
+
+  document.getElementById('spotList').innerHTML = info.spots.map(s => `
+    <div class="spot-card">
+      <div class="spot-img" style="background:${s.bg};">${s.emoji}</div>
+      <div class="spot-info">
+        <h4>${s.name}</h4>
+        <p>${s.desc}</p>
+        <span class="spot-tag">${s.tag}</span>
+      </div>
+    </div>
+  `).join('');
+
+  hero.dataset.dest = dest;
+  showPage('page2');
+}
+
+// 页面 1 → 2：点击村落卡片（事件委托 + onclick 双重保障）
+document.getElementById('villageList').addEventListener('click', (e) => {
+  const card = e.target.closest('.village-card');
+  if (!card) return;
+  handleVillageClick(card.dataset.dest);
+});
+
+// 页面 2 → 1：返回按钮
+document.getElementById('detailBack').addEventListener('click', () => showPage('page1'));
+
+// 页面 2 → 4：定制行程
+document.getElementById('detailGoPlan').addEventListener('click', () => {
+  const dest = document.getElementById('detailHero').dataset.dest;
+  if (dest) {
+    state.destination = dest;
+    destInput.value = dest;
+    destPresets.querySelectorAll('.dest-preset').forEach(b => b.classList.remove('active'));
+    const matched = [...destPresets.querySelectorAll('.dest-preset')].find(b => b.dataset.dest === dest);
+    if (matched) matched.classList.add('active');
+    searchAccommodations(dest);
+  }
+  showPage('page4');
+});
+
+// 页面 3 → 4：自选目的地后跳转
+document.getElementById('customDestGo').addEventListener('click', () => {
+  const val = document.getElementById('customDestInput').value.trim();
+  if (!val) { alert('请输入一个目的地～'); return; }
+  state.destination = val;
+  destInput.value = val;
+  searchAccommodations(val);
+  showPage('page4');
+});
+
+// 页面 3 预设目的地点击
+document.querySelector('#page3 .dest-presets').addEventListener('click', (e) => {
+  if (e.target.classList.contains('dest-preset')) {
+    document.querySelectorAll('#page3 .dest-preset').forEach(b => b.classList.remove('active'));
+    e.target.classList.add('active');
+    document.getElementById('customDestInput').value = e.target.dataset.dest;
+  }
+});
+
+// 页面 3 回车搜索
+document.getElementById('customDestInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const val = e.target.value.trim();
+    if (!val) return;
+    state.destination = val;
+    destInput.value = val;
+    searchAccommodations(val);
+    showPage('page4');
+  }
+});
+
+// 页面就绪——从 page1 开始
+showPage('page1');
+
+console.log('🌾 乡野一日 — AI 乡村行程智能规划器 已就绪');
+console.log('🔧 API 配置状态:', hasApiConfig() ? '已配置 AI 接口' : '使用内置示例数据');
+console.log('💡 点击右上角 ⚙️ 配置 OpenAI 兼容接口');
+</script>
+
+</body>
+</html>
