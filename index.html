@@ -1326,6 +1326,9 @@ function buildSystemPrompt() {
 你有三个高德地图工具可以调用。你必须主动使用它们来获取真实的地理数据，
 然后基于真实数据规划一份有画面感、有温度的乡村旅行行程。
 
+⚠️ 你只为中国大陆境内的目的地规划行程。如果用户输入的目的地位于国外
+（包括港澳台以外的地区），直接回复"国外的地方以后再来探索吧 🌏"，不要调用任何工具。
+
 ══════════════════════════════════════
   工作流程
 ══════════════════════════════════════
@@ -1878,6 +1881,26 @@ function amapFetch(path, params = {}) {
   });
 }
 
+function isInChina(lat, lng, adcode, province) {
+  // 高德 API 只覆盖中国大陆，境外返回空或境外 adcode
+  if (adcode && (adcode.startsWith('9') || adcode === '0')) return false;
+  // 坐标不在中国范围内
+  if (lat < 18 || lat > 54 || lng < 73 || lng > 135) return false;
+  // 省份信息包含境外关键词
+  if (province && /海外|国外|境外/.test(province)) return false;
+  return true;
+}
+
+var _lastForeignDest = null;
+
+function showForeignHint(dest) {
+  hideLoading();
+  const msg = dest
+    ? `「${dest}」在国外，暂时不支持境外目的地。国外的地方以后再来探索吧 🌏`
+    : '国外的地方以后再来探索吧 🌏';
+  showError('暂不支持境外', msg, '🌏');
+}
+
 async function geocodeDestination(placeName) {
   // 尝试加广东前缀提高命中率
   let data = await amapFetch('/geocode/geo', { address: placeName });
@@ -1887,7 +1910,13 @@ async function geocodeDestination(placeName) {
   if (!data.geocodes || data.geocodes.length === 0) return null;
   const g = data.geocodes[0];
   const [lng, lat] = g.location.split(',').map(Number);
-  return { name: g.formatted_address || g.name, lng, lat, adcode: g.adcode, level: g.level };
+  return {
+    name: g.formatted_address || g.name,
+    lng, lat,
+    adcode: g.adcode,
+    level: g.level,
+    province: g.province
+  };
 }
 
 async function searchNearbyPOIs(lng, lat, destinationName, keywords, radius = 5000) {
@@ -2355,6 +2384,10 @@ async function generateTrip(useFallback = false) {
 
   try {
     geocodeResult = await geocodeDestination(state.destination);
+    if (geocodeResult && !isInChina(geocodeResult.lat, geocodeResult.lng, geocodeResult.adcode, geocodeResult.province)) {
+      showForeignHint(state.destination);
+      return;
+    }
     if (geocodeResult) {
       const interestKwMap = { history: '古迹|博物馆|寺庙|祠堂|古村', nature: '景点|公园|山|湖|森林|梯田', food: '餐厅|美食|小吃|农家乐|特产', family: '景点|乐园|体验|手工|采摘' };
       const keywords = state.interests.map(t => interestKwMap[t] || '景点').join('|');
@@ -2733,15 +2766,25 @@ document.getElementById('detailGoPlan').addEventListener('click', () => {
   showPage('page4');
 });
 
-// 页面 3 → 4：自选目的地后跳转
-document.getElementById('customDestGo').addEventListener('click', () => {
+// 页面 3 → 4：自选目的地（先检查是否境外）
+async function goCustomDest() {
   const val = document.getElementById('customDestInput').value.trim();
   if (!val) { alert('请输入一个目的地～'); return; }
+  // 快速地理编码检查
+  try {
+    const geo = await geocodeDestination(val);
+    if (geo && !isInChina(geo.lat, geo.lng, geo.adcode, geo.province)) {
+      showForeignHint(val);
+      return;
+    }
+  } catch {}
   state.destination = val;
   destInput.value = val;
   searchAccommodations(val);
   showPage('page4');
-});
+}
+
+document.getElementById('customDestGo').addEventListener('click', () => goCustomDest());
 
 // 页面 3 预设目的地点击
 document.querySelector('#page3 .dest-presets').addEventListener('click', (e) => {
@@ -2754,14 +2797,7 @@ document.querySelector('#page3 .dest-presets').addEventListener('click', (e) => 
 
 // 页面 3 回车搜索
 document.getElementById('customDestInput').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    const val = e.target.value.trim();
-    if (!val) return;
-    state.destination = val;
-    destInput.value = val;
-    searchAccommodations(val);
-    showPage('page4');
-  }
+  if (e.key === 'Enter') { goCustomDest(); }
 });
 
 // 页面就绪——从 page1 开始
