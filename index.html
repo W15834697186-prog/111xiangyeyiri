@@ -2282,14 +2282,14 @@ async function generateTrip(useFallback = false) {
     if (cached) { console.log('📦 命中缓存'); displayTrip(cached); return; }
   }
 
-  const hasAI = hasApiConfig() && !useFallback;
+  const proxyAvailable = await hasApiConfig();
+  const hasAI = proxyAvailable && !useFallback;
   console.log('🔍 generateTrip:', {
     destination: state.destination,
     hasAI,
-    hasApiSettings: hasApiConfig(),
+    proxyAvailable,
     useFallback,
-    cached: !useFallback ? !!getCachedTrip() : 'skipped',
-    settings: getSettings()
+    cached: !useFallback ? !!getCachedTrip() : 'skipped'
   });
 
   // 2. AI 自主搜索 + 规划（Function Calling）
@@ -2743,7 +2743,7 @@ document.getElementById('customDestInput').addEventListener('keydown', (e) => {
 showPage('page1');
 
 console.log('🌾 乡野一日 — AI 乡村行程智能规划器 已就绪');
-console.log('🔧 API 配置状态:', hasApiConfig() ? '已配置 AI 接口' : '使用内置示例数据');
+console.log('🔧 代理需先启动: npm start → http://localhost:3456');
 console.log('💡 点击右上角 ⚙️ 配置 OpenAI 兼容接口');
 </script>
 
