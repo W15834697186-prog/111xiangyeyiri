@@ -4,9 +4,28 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const app = express();
-app.use(cors());
+
+// CORS：仅允许本机访问（防止外部网页调用代理）
+app.use(cors({ origin: [/^http:\/\/localhost:\d+$/, /^http:\/\/127\.0\.0\.1:\d+$/, /^file:\/\//] }));
+
 app.use(express.json());
-app.use(express.static('.'));
+
+// ⚠️ 安全拦截 —— 必须在 express.static 之前执行
+app.use((req, res, next) => {
+  const blocked = ['.env', '.git', 'server.js', 'package.json', 'package-lock.json', 'node_modules', '.gitignore', 'package-lock'];
+  const url = req.url.toLowerCase();
+  if (blocked.some(b => url.includes(b))) {
+    return res.status(404).send('Not Found');
+  }
+  next();
+});
+
+// 只暴露 index.html + images/ + 前端资源
+app.use(express.static('.', {
+  setHeaders: (res, path) => {
+    res.set('Cache-Control', 'no-store');
+  }
+}));
 
 const PORT = process.env.PORT || 3456;
 
@@ -31,11 +50,11 @@ app.post('/api/chat/completions', async (req, res) => {
     });
     const data = await response.json();
     if (!response.ok) {
-      return res.status(response.status).json({ error: `DeepSeek ${response.status}`, detail: data });
+      return res.status(502).json({ error: 'AI 服务暂时不可用' });
     }
     res.json(data);
   } catch (err) {
-    res.status(502).json({ error: 'AI 服务连接失败', detail: err.message });
+    res.status(502).json({ error: 'AI 服务连接失败' });
   }
 });
 
@@ -60,7 +79,7 @@ app.get('/api/amap/*', async (req, res) => {
       res.json(data);
     }
   } catch (err) {
-    res.status(502).json({ error: '地图服务连接失败', detail: err.message });
+    res.status(502).json({ error: '地图服务连接失败' });
   }
 });
 
