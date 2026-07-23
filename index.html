@@ -1785,48 +1785,32 @@ function renderMap(steps) {
 }
 
 // ==================== 高德地图 API ====================
-function amapFetch(path, params = {}) {
-  return new Promise((resolve, reject) => {
-    const base = PROXY_BASE + '/api/amap/' + path;
-    const sep = base.includes('?') ? '&' : '?';
-    let url = base + sep;
-    for (const [k, v] of Object.entries(params)) {
-      if (v !== undefined && v !== '') url += '&' + k + '=' + encodeURIComponent(String(v));
+async function amapFetch(path, params = {}) {
+  let url = PROXY_BASE + '/amap/' + path;
+  const sep = url.includes('?') ? '&' : '?';
+  url += sep;
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== '') url += '&' + k + '=' + encodeURIComponent(String(v));
+  }
+
+  console.log('🌐 高德请求:', url);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const resp = await fetch(url, { signal: controller.signal });
+    const data = await resp.json();
+    if (data.status && data.status !== '1' && data.infocode !== '10000') {
+      throw new Error(`高德 API (${data.infocode}): ${data.info}`);
     }
-    // JSONP 兼容（通过代理转发 callback）
-    const cbName = '_amap_cb_' + Date.now();
-    url += '&callback=' + cbName;
-
-    console.log('🌐 高德代理:', url);
-
-    const script = document.createElement('script');
-    const timeout = setTimeout(() => {
-      cleanup();
-      reject(new Error('高德 API 超时'));
-    }, 15000);
-
-    const cleanup = () => {
-      clearTimeout(timeout);
-      delete window[cbName];
-      if (script.parentNode) script.parentNode.removeChild(script);
-    };
-
-    window[cbName] = function(data) {
-      cleanup();
-      if (data.status && data.status !== '1' && data.infocode !== '10000') {
-        reject(new Error(`高德 API (${data.infocode}): ${data.info}`));
-        return;
-      }
-      resolve(data);
-    };
-
-    script.src = url;
-    script.onerror = () => {
-      cleanup();
-      reject(new Error('代理服务器未启动。请运行 npm start 启动代理。'));
-    };
-    document.head.appendChild(script);
-  });
+    return data;
+  } catch (err) {
+    if (err.name === 'AbortError') throw new Error('请求超时');
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function isInChina(lat, lng, adcode, province) {
