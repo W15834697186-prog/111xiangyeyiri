@@ -65,13 +65,13 @@ app.get('/api/amap/*', async (req, res) => {
     const path = req.params[0];
     const amapUrl = new URL(`https://restapi.amap.com/v3/${path}`);
     amapUrl.searchParams.set('key', AMAP_KEY);
-    // 转发所有查询参数
+    // 转发查询参数（跳过 key 和 callback，callback 由代理自己处理）
     for (const [k, v] of Object.entries(req.query)) {
-      if (k !== 'key' && v !== undefined) amapUrl.searchParams.set(k, v);
+      if (k !== 'key' && k !== 'callback' && v !== undefined) amapUrl.searchParams.set(k, v);
     }
     const response = await fetch(amapUrl.toString());
     const data = await response.json();
-    // 支持 JSONP callback
+    // JSONP callback：高德 REST API 不支持 callback 参数，由代理自行包装
     if (req.query.callback) {
       res.type('application/javascript');
       res.send(`${req.query.callback}(${JSON.stringify(data)})`);
