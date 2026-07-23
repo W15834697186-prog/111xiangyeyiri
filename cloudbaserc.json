@@ -1,0 +1,19 @@
+{
+  "envId": "xiangyeyiri-d3ghgfukb25e62d3e",
+  "version": "2.0",
+  "functionRoot": "./cloudfunctions",
+  "functions": [
+    {
+      "name": "api-proxy",
+      "timeout": 30,
+      "runtime": "Nodejs18.15",
+      "type": "http",
+      "path": "/api-proxy",
+      "envVariables": {}
+    }
+  ],
+  "hosting": {
+    "root": "./deploy",
+    "errorPage": "index.html"
+  }
+}

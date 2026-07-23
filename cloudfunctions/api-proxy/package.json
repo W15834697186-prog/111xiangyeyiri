@@ -1,0 +1,8 @@
+{
+  "name": "api-proxy",
+  "version": "1.0.0",
+  "dependencies": {
+    "@cloudbase/functions-framework": "^1.0.0",
+    "cors": "^2.8.5"
+  }
+}
