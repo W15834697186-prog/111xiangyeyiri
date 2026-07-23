@@ -1,0 +1,14 @@
+{
+  "name": "xiangyeyiri",
+  "version": "1.0.0",
+  "description": "乡野一日 — AI 乡村行程智能规划器",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0"
+  }
+}

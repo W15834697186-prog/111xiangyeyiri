@@ -845,37 +845,23 @@
 
     <!-- 设置面板 -->
     <div class="settings-panel" id="settingsPanel">
-      <h3>🔧 API 设置</h3>
+      <h3>🔧 设置</h3>
       <p style="font-size:12px;color:var(--text-light);margin-bottom:14px;">
-        使用 OpenAI 兼容接口，支持 DeepSeek、通义千问、智谱等。
+        所有 API Key 由代理服务器统一管理，前端不存储任何密钥。
       </p>
       <div class="field">
-        <label>接口地址 (Base URL)</label>
-        <input type="text" id="apiBaseUrl"
-               placeholder="https://api.openai.com/v1">
-      </div>
-      <div class="field">
-        <label>API Key</label>
-        <input type="password" id="apiKey"
-               placeholder="sk-...">
-      </div>
-      <div class="field">
-        <label>模型名称</label>
+        <label>模型名称（可选）</label>
         <input type="text" id="apiModel"
-               placeholder="gpt-4o / deepseek-chat / qwen-plus">
-      </div>
-      <div class="field">
-        <label>🗺️ 高德地图 API Key</label>
-        <input type="text" id="amapApiKey"
-               placeholder="用于地理编码 + POI 搜索，在 lbs.amap.com 获取">
+               placeholder="默认: deepseek-chat">
       </div>
       <div class="field-row">
-        <button class="btn-sm btn-save" id="saveSettings">💾 保存配置</button>
+        <button class="btn-sm btn-save" id="saveSettings">💾 保存</button>
         <button class="btn-sm btn-clear" id="clearSettings">清除</button>
       </div>
       <div class="status" id="settingsStatus"></div>
       <p style="font-size:11px;color:var(--text-light);margin-top:10px;line-height:1.4;">
-        💡 配置保存在本地浏览器，不会上传到任何服务器。未配置时将使用内置的示例行程数据。
+        🔐 密钥安全说明：AI Key 和 高德 Key 保存在服务器端 <code>.env</code> 文件中，
+        前端通过本地代理 (<code>localhost:3456</code>) 转发请求，浏览器的网页源码中不会出现任何密钥。
       </p>
     </div>
   </header>
@@ -1109,10 +1095,7 @@ const $ = (sel) => document.querySelector(sel);
 
 const settingsToggle = $('#settingsToggle');
 const settingsPanel = $('#settingsPanel');
-const apiBaseUrlInput = $('#apiBaseUrl');
-const apiKeyInput = $('#apiKey');
 const apiModelInput = $('#apiModel');
-const amapApiKeyInput = $('#amapApiKey');
 const saveSettingsBtn = $('#saveSettings');
 const clearSettingsBtn = $('#clearSettings');
 const settingsStatus = $('#settingsStatus');
@@ -1150,55 +1133,46 @@ const accommodationCustomBtn = $('#accommodationCustomBtn');
 const accommodationStatus = $('#accommodationStatus');
 
 // ==================== 设置管理 ====================
-// 默认配置——打开网页即可使用，无需手动设置
-const DEFAULT_SETTINGS = {
-  baseUrl: 'https://api.deepseek.com/v1',
-  apiKey: 'REDACTED_KEY',
-  model: 'deepseek-chat',
-  amapKey: 'f4b7b60ff530d7373a28d8d01a518d07'
-};
+// API 代理地址（所有密钥由代理服务器持有，前端不存任何 Key）
+const PROXY_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+  ? '' : 'http://localhost:3456';
 
 function getSettings() {
   try {
     const raw = localStorage.getItem('xiangye_settings');
-    // 用户自定义设置优先，未设置的字段回退到默认值
-    const saved = raw ? JSON.parse(raw) : {};
-    return { ...DEFAULT_SETTINGS, ...saved };
-  } catch { return { ...DEFAULT_SETTINGS }; }
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
 }
 
 function saveSettings(settings) {
   localStorage.setItem('xiangye_settings', JSON.stringify(settings));
 }
 
-function hasApiConfig() {
-  const s = getSettings();
-  return !!(s.baseUrl && s.apiKey && s.model);
+// API 配置：密钥由代理服务器持有，前端只检查代理是否可达
+let _proxyAvailable = null;
+async function hasApiConfig() {
+  if (_proxyAvailable !== null) return _proxyAvailable;
+  try {
+    const resp = await fetch(PROXY_BASE + '/api/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: 'test', messages: [{ role: 'user', content: 'ping' }], max_tokens: 1 }),
+      signal: AbortSignal.timeout(3000)
+    });
+    _proxyAvailable = resp.status !== 503; // 503 = 未配置 Key
+  } catch { _proxyAvailable = false; }
+  return _proxyAvailable;
 }
 
 function loadSettingsToForm() {
-  const s = getSettings();
-  // 如果用户没有自定义设置（和默认值不同），placeholder 显示默认值，输入框留空
-  const saved = localStorage.getItem('xiangye_settings');
-  const user = saved ? JSON.parse(saved) : {};
-  apiBaseUrlInput.value = user.baseUrl || '';
-  apiBaseUrlInput.placeholder = user.baseUrl ? '' : '默认: ' + DEFAULT_SETTINGS.baseUrl;
-  apiKeyInput.value = user.apiKey || '';
-  apiKeyInput.placeholder = user.apiKey ? '' : '默认: sk-...' + DEFAULT_SETTINGS.apiKey.slice(-8);
+  const user = getSettings();
   apiModelInput.value = user.model || '';
-  apiModelInput.placeholder = user.model ? '' : '默认: ' + DEFAULT_SETTINGS.model;
-  amapApiKeyInput.value = user.amapKey || '';
-  amapApiKeyInput.placeholder = user.amapKey ? '' : '默认: ...' + DEFAULT_SETTINGS.amapKey.slice(-8);
+  apiModelInput.placeholder = user.model ? '' : '默认: deepseek-chat';
   updateSettingsIndicator();
 }
 
-function hasAmapKey() {
-  const s = getSettings();
-  return !!(s.amapKey);
-}
-
 function getAmapKey() {
-  return getSettings().amapKey;
+  return ''; // Key 由代理服务器持有，前端不存
 }
 
 function updateSettingsIndicator() {
@@ -1229,38 +1203,22 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') settingsPanel.classList.remove('show');
 });
 
-// 保存设置
+// 保存设置（仅保存模型名，Key 由代理管理）
 saveSettingsBtn.addEventListener('click', () => {
-  const baseUrl = apiBaseUrlInput.value.trim();
-  const apiKey = apiKeyInput.value.trim();
   const model = apiModelInput.value.trim();
-  const amapKey = amapApiKeyInput.value.trim();
-
-  saveSettings({ baseUrl, apiKey, model, amapKey });
+  saveSettings({ model });
   updateSettingsIndicator();
-  const hasAI = !!(baseUrl && apiKey && model);
-  const hasAmap = !!amapKey;
-  let msg = '✅ 配置已保存：';
-  if (hasAI) msg += ' AI 生成 /';
-  if (hasAmap) msg += ' 高德地图 /';
-  if (!hasAI && !hasAmap) msg += ' 将使用内置示例数据';
-  settingsStatus.textContent = msg.replace(/\/$/, '');
+  settingsStatus.textContent = model ? '✅ 模型已设为: ' + model : '✅ 将使用默认模型 deepseek-chat';
   settingsStatus.className = 'status success show';
-
-  setTimeout(() => {
-    settingsStatus.className = 'status';
-  }, 2000);
+  setTimeout(() => { settingsStatus.className = 'status'; }, 2000);
 });
 
 // 清除设置
 clearSettingsBtn.addEventListener('click', () => {
   localStorage.removeItem('xiangye_settings');
-  apiBaseUrlInput.value = '';
-  apiKeyInput.value = '';
   apiModelInput.value = '';
-  amapApiKeyInput.value = '';
   updateSettingsIndicator();
-  settingsStatus.textContent = '🗑️ 配置已清除，将使用示例行程数据';
+  settingsStatus.textContent = '🗑️ 已恢复默认设置';
   settingsStatus.className = 'status info show';
   setTimeout(() => { settingsStatus.className = 'status'; }, 2000);
 });
@@ -1505,12 +1463,7 @@ async function executeAmapTool(name, args) {
 
 // ==================== AI 调用（Function Calling 多轮对话）====================
 async function callAIWithTools(userPrompt) {
-  const settings = getSettings();
-  if (!settings.baseUrl || !settings.apiKey || !settings.model) throw new Error('NO_CONFIG');
-
-  let baseUrl = settings.baseUrl.replace(/\/+$/, '');
-  if (!baseUrl.endsWith('/v1') && !baseUrl.includes('/chat/completions')) baseUrl += '/v1';
-  const endpoint = baseUrl + '/chat/completions';
+  const endpoint = PROXY_BASE + '/api/chat/completions';
 
   const messages = [
     { role: 'system', content: buildSystemPrompt() },
@@ -1520,14 +1473,16 @@ async function callAIWithTools(userPrompt) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 120000);
 
+  const model = (getSettings().model) || 'deepseek-chat';
+
   try {
     for (let turn = 0; turn < 6; turn++) {
-      const body = { model: settings.model, messages, temperature: state.routeVariation > 0 ? 1.0 : 0.8, max_tokens: 4096 };
+      const body = { model, messages, temperature: state.routeVariation > 0 ? 1.0 : 0.8, max_tokens: 4096 };
       if (turn < 4) { body.tools = AMAP_TOOLS; body.tool_choice = 'auto'; }
 
       const resp = await fetch(endpoint, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${settings.apiKey}` },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
         signal: controller.signal
       });
@@ -1838,18 +1793,17 @@ function renderMap(steps) {
 // ==================== 高德地图 API ====================
 function amapFetch(path, params = {}) {
   return new Promise((resolve, reject) => {
-    const key = getAmapKey();
-    const base = 'https://restapi.amap.com/v3';
-    const sep = path.includes('?') ? '&' : '?';
-    let url = base + path + sep + 'key=' + encodeURIComponent(key);
+    const base = PROXY_BASE + '/api/amap/' + path;
+    const sep = base.includes('?') ? '&' : '?';
+    let url = base + sep;
     for (const [k, v] of Object.entries(params)) {
       if (v !== undefined && v !== '') url += '&' + k + '=' + encodeURIComponent(String(v));
     }
-    // JSONP：绕过 file:// 的 CORS 限制
+    // JSONP 兼容（通过代理转发 callback）
     const cbName = '_amap_cb_' + Date.now();
     url += '&callback=' + cbName;
 
-    console.log('🌐 高德 JSONP:', url.replace(key, 'KEY'));
+    console.log('🌐 高德代理:', url);
 
     const script = document.createElement('script');
     const timeout = setTimeout(() => {
@@ -1865,7 +1819,7 @@ function amapFetch(path, params = {}) {
 
     window[cbName] = function(data) {
       cleanup();
-      if (data.status !== '1' && data.infocode !== '10000') {
+      if (data.status && data.status !== '1' && data.infocode !== '10000') {
         reject(new Error(`高德 API (${data.infocode}): ${data.info}`));
         return;
       }
@@ -1875,7 +1829,7 @@ function amapFetch(path, params = {}) {
     script.src = url;
     script.onerror = () => {
       cleanup();
-      reject(new Error('高德 API 网络错误'));
+      reject(new Error('代理服务器未启动。请运行 npm start 启动代理。'));
     };
     document.head.appendChild(script);
   });
