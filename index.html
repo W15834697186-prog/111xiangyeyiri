@@ -813,20 +813,14 @@
     <header class="app-header">
       <span class="logo-icon">🔍</span>
       <h1>自选目的地</h1>
-      <p class="subtitle">输入你想去的广东乡村，开始规划</p>
+      <p class="subtitle">输入你想去的任何景点，开始规划</p>
     </header>
     <div class="card">
       <div class="form-group">
         <label class="form-label"><span class="icon">📍</span>想去哪里？</label>
         <input type="text" class="form-input" id="customDestInput"
-               placeholder="输入任意广东乡村名称…"
+               placeholder="输入你想去的景点名称…"
                style="font-size:18px;padding:16px;">
-        <div class="dest-presets" style="margin-top:12px;">
-          <button class="dest-preset" data-dest="清远千年瑶寨">清远千年瑶寨</button>
-          <button class="dest-preset" data-dest="清远英西峰林">清远英西峰林</button>
-          <button class="dest-preset" data-dest="梅州桥溪古村">梅州桥溪古村</button>
-          <button class="dest-preset" data-dest="韶关丹霞夏富村">韶关丹霞夏富村</button>
-        </div>
       </div>
       <button class="btn btn-primary" id="customDestGo">✨ 开始规划行程</button>
     </div>
@@ -2739,15 +2733,6 @@ async function goCustomDest() {
 }
 
 document.getElementById('customDestGo').addEventListener('click', () => goCustomDest());
-
-// 页面 3 预设目的地点击
-document.querySelector('#page3 .dest-presets').addEventListener('click', (e) => {
-  if (e.target.classList.contains('dest-preset')) {
-    document.querySelectorAll('#page3 .dest-preset').forEach(b => b.classList.remove('active'));
-    e.target.classList.add('active');
-    document.getElementById('customDestInput').value = e.target.dataset.dest;
-  }
-});
 
 // 页面 3 回车搜索
 document.getElementById('customDestInput').addEventListener('keydown', (e) => {
